@@ -63,6 +63,29 @@ export function classifyGate(input: ClassifyInput): Outcome {
 	return "CAPABILITY_FAIL";
 }
 
+export interface ChildSignal {
+	timedOut: boolean;
+	spawnError?: string;
+	stopReason?: string;
+	compactions: number;
+	contextWindow?: number;
+}
+
+/**
+ * Signals that come from the child itself rather than from the gate.
+ * Returns null when the gate should decide.
+ *
+ * Context failures do not escalate: T1 does not buy a meaningfully larger
+ * window (T0 1.0M vs T1 1.05M on opencode-go), so a longer model cannot fix a
+ * task that already failed to fit.
+ */
+export function classifyChildSignal(signal: ChildSignal): Outcome | null {
+	if (signal.timedOut) return "TIMEOUT";
+	if (signal.spawnError) return "ERROR";
+	if (signal.stopReason === "length") return "CONTEXT_FAIL";
+	return null;
+}
+
 /** Does this output look like a model mistake rather than a broken environment? */
 export function looksLikeCapabilityFailure(output: string): boolean {
 	if (isEnvironmentFailure(output)) return false;

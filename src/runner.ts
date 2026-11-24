@@ -64,6 +64,7 @@ export function runChild(options: RunChildOptions): Promise<ChildResult> {
 	const result: ChildResult = {
 		exitCode: null,
 		timedOut: false,
+		compactions: 0,
 		turns: 0,
 		costUsd: 0,
 		tokens: { input: 0, output: 0, cacheRead: 0 },
@@ -84,9 +85,14 @@ export function runChild(options: RunChildOptions): Promise<ChildResult> {
 
 		const handleEvent = (event: unknown) => {
 			const ev = event as { type?: string; message?: any };
+			if (ev.type === "compaction_start") {
+				result.compactions++;
+				return;
+			}
 			if (ev.type !== "message_end" || !ev.message) return;
 			const msg = ev.message;
 			if (msg.role === "assistant") {
+				if (msg.stopReason) result.stopReason = msg.stopReason;
 				result.turns++;
 				const usage = msg.usage ?? {};
 				result.costUsd += Number(usage.cost?.total ?? 0);

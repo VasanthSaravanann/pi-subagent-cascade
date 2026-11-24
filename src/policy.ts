@@ -65,6 +65,7 @@ export interface Aggregated {
 	preexisting: number;
 	totalCostUsd: number;
 	costPerGreenUsd: number;
+	unknownCost: number;
 	byTier: Record<string, { attempts: number; passes: number; costUsd: number }>;
 }
 
@@ -90,11 +91,13 @@ export function aggregate(rows: AttemptRow[]): Aggregated {
 		preexisting: 0,
 		totalCostUsd: 0,
 		costPerGreenUsd: 0,
+		unknownCost: 0,
 		byTier: {},
 	};
 
 	for (const r of rows) {
 		out.totalCostUsd += r.costUsd;
+		if (r.costKnown === false) out.unknownCost++;
 		const t = (out.byTier[r.tier] ??= { attempts: 0, passes: 0, costUsd: 0 });
 		t.attempts++;
 		t.costUsd += r.costUsd;
@@ -134,6 +137,7 @@ export function formatStats(a: Aggregated): string {
 		`gate red at HEAD ${a.preexisting}`,
 		`total spend      $${a.totalCostUsd.toFixed(5)}`,
 		`$ / green task   $${a.costPerGreenUsd.toFixed(5)}`,
+		...(a.unknownCost > 0 ? [`cost unknown     ${a.unknownCost} attempt(s) — provider publishes no pricing; those rows count as $0`] : []),
 		"",
 		...tiers,
 		"",

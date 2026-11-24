@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Type } from "typebox";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { classifyGate, extractErrCode } from "./classify.js";
+import { classifyChildSignal, classifyGate, extractErrCode } from "./classify.js";
 import {
 	addWorktree,
 	capturePatch,
@@ -100,6 +100,33 @@ export default function subagentCascade(pi: ExtensionAPI) {
 			const sig = signature(input.task, repo);
 			const tiers = planAttempts(input.tier0 ?? DEFAULT_TIER0, input.tier1 ?? DEFAULT_TIER1);
 
+			// A tier that cannot hold a repo-sized context (or has no catalog entry)
+			// is a configuration error, not a model failure. Fail before spending.
+			const tierInfo = tiers.map((tier) => {
+				const [provider, rest] = tier.model.split("/");
+				const id = (rest ?? "").split(":")[0];
+				const model = provider && id ? (ctx.modelRegistry?.find?.(provider, id) as any) : undefined;
+				if (!model) {
+					throw new Error(`tier ${tier.id}: model "${tier.model}" is not in the catalog. Run the probe or pass a valid provider/id.`);
+				}
+				const contextWindow = Number(model.contextWindow ?? 0);
+				if (contextWindow > 0 && contextWindow < 64_000) {
+					throw new Error(
+						`tier ${tier.id}: model "${tier.model}" has a ${contextWindow} token context window; below the 64000 minimum for repo work.`,
+					);
+				}
+				return {
+					tier: tier.id,
+					model: tier.model,
+					contextWindow,
+					maxTokens: Number(model.maxTokens ?? 0),
+					// Pi defaults unknown pricing to 0, so a zero input rate is
+					// "unpriced", not "free". Never let it read as a real cost.
+					priced: Number(model.cost?.input ?? 0) > 0,
+				};
+			});
+			const windows = tierInfo.map((t) => `${t.tier} ${t.contextWindow || "?"}ctx/${t.maxTokens || "?"}out`).join(", ");
+
 			onUpdate?.({
 				content: [{ type: "text", text: `baseline gate at HEAD…` }],
 				details: { phase: "baseline" },
@@ -141,6 +168,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					baselineGreen: false,
 					durationMs: 0,
 					costUsd: 0,
+					costKnown: true,
 					tokens: { input: 0, output: 0, cacheRead: 0 },
 					errTail: errTail(baseGate.output, 200),
 				};
@@ -169,6 +197,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 				});
 
 				const started = Date.now();
+				const priced = tierInfo.find((t) => t.tier === tier.id)?.priced ?? true;
 				const wt = await addWorktree(repo, `${taskId}-${tier.id}`);
 				if (!wt.ok) throw new Error(`cannot create worktree for ${tier.id}: ${wt.error}`);
 				linkNodeModules(repo, wt.path);
@@ -180,11 +209,16 @@ export default function subagentCascade(pi: ExtensionAPI) {
 				let gateOutput = "";
 				let gateExit: number | null = null;
 
-				if (child.timedOut) {
-					outcome = "TIMEOUT";
-				} else if (child.spawnError) {
-					outcome = "ERROR";
-					gateOutput = child.spawnError;
+				const signalOutcome = classifyChildSignal({
+					timedOut: child.timedOut,
+					spawnError: child.spawnError,
+					stopReason: child.stopReason,
+					compactions: child.compactions,
+				});
+
+				if (signalOutcome) {
+					outcome = signalOutcome;
+					gateOutput = `${child.stderrTail}\n${child.text}`.slice(-2000);
 				} else if (/Model\b.*(not found|deprecated)|ModelDeprecated|not found for provider/i.test(child.stderrTail)) {
 					outcome = "ERROR";
 					gateOutput = `tier ${tier.id} model "${tier.model}" is not usable:\n${child.stderrTail}`;
@@ -220,7 +254,8 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					errTail: outcome === "PASS" ? undefined : errTail(gateOutput, 300),
 					baselineGreen,
 					durationMs: Date.now() - started,
-					costUsd: child.costUsd,
+					costUsd: priced ? child.costUsd : 0,
+					costKnown: priced,
 					tokens: child.tokens,
 					patchFile,
 					escalatedTo: outcome === "CAPABILITY_FAIL" ? (tiers[i + 1]?.id ?? null) : null,
@@ -273,6 +308,8 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					totalCostUsd: totalCost,
 					patchFile,
 					baselineGreen,
+					tiers: tierInfo,
+					windows,
 				},
 			};
 		},

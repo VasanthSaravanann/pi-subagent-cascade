@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { classifyGate, extractErrCode, isEnvironmentFailure, looksLikeCapabilityFailure } from "../src/classify.js";
+import {
+	classifyChildSignal,
+	classifyGate,
+	extractErrCode,
+	isEnvironmentFailure,
+	looksLikeCapabilityFailure,
+} from "../src/classify.js";
+import { shouldContinue } from "../src/policy.js";
 
 describe("classifyGate", () => {
 	it("passes on a zero exit", () => {
@@ -57,5 +64,30 @@ describe("signal helpers", () => {
 		expect(looksLikeCapabilityFailure("error[E0308]: mismatched types")).toBe(true);
 		expect(looksLikeCapabilityFailure("ENOTFOUND")).toBe(false);
 		expect(looksLikeCapabilityFailure("tests failed")).toBe(false);
+	});
+});
+
+describe("child signal classification", () => {
+	const base = { timedOut: false, compactions: 0 };
+
+	it("treats length as a context failure, not a capability failure", () => {
+		expect(classifyChildSignal({ ...base, stopReason: "length" })).toBe("CONTEXT_FAIL");
+	});
+
+	it("does not retry a timeout or a spawn error", () => {
+		expect(classifyChildSignal({ ...base, timedOut: true })).toBe("TIMEOUT");
+		expect(classifyChildSignal({ ...base, spawnError: "ENOENT pi" })).toBe("ERROR");
+	});
+
+	it("defers to the gate when the child finished normally", () => {
+		expect(classifyChildSignal({ ...base, stopReason: "stop", compactions: 2 })).toBeNull();
+	});
+});
+
+describe("context budget", () => {
+	it("keeps escalation out of the context-failure path", () => {
+		// T1 does not buy a meaningfully larger window than T0, so only
+		// CAPABILITY_FAIL may continue the ladder.
+		expect(shouldContinue("CONTEXT_FAIL")).toBe(false);
 	});
 });

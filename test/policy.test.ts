@@ -16,6 +16,7 @@ const row = (over: Partial<AttemptRow>): AttemptRow => ({
 	baselineGreen: true,
 	durationMs: 1,
 	costUsd: 0.01,
+	costKnown: true,
 	tokens: { input: 1, output: 1, cacheRead: 0 },
 	...over,
 });
@@ -103,5 +104,20 @@ describe("aggregate", () => {
 
 	it("renders a caveat with the stats", () => {
 		expect(formatStats(aggregate(rows))).toContain("caveat");
+	});
+});
+
+describe("unknown provider pricing", () => {
+	it("counts unpriced attempts instead of reporting them as free", () => {
+		const a = aggregate([
+			row({ taskId: "a", costUsd: 0, costKnown: false }),
+			row({ taskId: "b", costUsd: 0.01, costKnown: true }),
+		]);
+		expect(a.unknownCost).toBe(1);
+		expect(formatStats(a)).toContain("cost unknown");
+	});
+
+	it("stays quiet when every attempt is priced", () => {
+		expect(formatStats(aggregate([row({ taskId: "a" })])).includes("cost unknown")).toBe(false);
 	});
 });

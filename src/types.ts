@@ -14,6 +14,7 @@ export type Outcome =
 	| "ENV_FAIL"
 	| "PREEXISTING"
 	| "TIMEOUT"
+	| "CONTEXT_FAIL"
 	| "ERROR";
 
 export interface Tier {
@@ -38,6 +39,8 @@ export interface AttemptRow {
 	baselineGreen: boolean;
 	durationMs: number;
 	costUsd: number;
+	/** false when the provider publishes no pricing (cost is unknown, not free). */
+	costKnown: boolean;
 	tokens: { input: number; output: number; cacheRead: number };
 	patchFile?: string | null;
 	escalatedTo?: string | null;
@@ -46,6 +49,8 @@ export interface AttemptRow {
 export interface ChildResult {
 	exitCode: number | null;
 	timedOut: boolean;
+	stopReason?: string;
+	compactions: number;
 	turns: number;
 	costUsd: number;
 	tokens: { input: number; output: number; cacheRead: number };
