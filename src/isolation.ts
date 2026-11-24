@@ -78,8 +78,34 @@ export async function removeWorktree(repo: string, worktreePath: string): Promis
 	await git(repo, ["worktree", "prune"]);
 }
 
-/** Run a shell command in a directory with a hard deadline and a bounded tail. */
-export function runShell(
+/** Dependency/build dirs worth sharing with an attempt worktree when absent there. */
+export const LINKED_DIRS = ["node_modules", ".venv", "venv", "target", "vendor"];
+
+/**
+ * Symlink common dependency directories from the source repo into a worktree
+ * so gates that need installed deps do not fail with MODULE_NOT_FOUND.
+ * Silently skips anything that cannot be linked. Gitignored plain files
+ * (.env, local config, compiled artifacts) are still NOT carried over —
+ * documented limitation, SKILL §5/§10.
+ */
+export function linkDependencyDirs(repo: string, worktree: string): string[] {
+	const linked: string[] = [];
+	for (const name of LINKED_DIRS) {
+		try {
+			const src = path.join(repo, name);
+			const dst = path.join(worktree, name);
+			if (fs.existsSync(src) && !fs.existsSync(dst)) {
+				fs.symlinkSync(src, dst, "junction");
+				linked.push(name);
+			}
+		} catch {
+			// A missing link only matters for gates that need that dir.
+		}
+	}
+	return linked;
+}
+
+/** Run a shell command in a directory with a hard deadline and a bounded tail. */export function runShell(
 	command: string,
 	cwd: string,
 	timeoutMs: number,

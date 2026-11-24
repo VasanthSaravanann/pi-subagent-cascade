@@ -13,6 +13,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { classifyChildSignal, classifyGate, extractErrCode, isDeterministicGate } from "./classify.js";
 import {
 	addWorktree,
+	linkDependencyDirs,
 	capturePatch,
 	preflight,
 	removeWorktree,
@@ -61,16 +62,6 @@ type Params = {
 	profile?: string;
 	maxCostUsd?: number;
 };
-
-function linkNodeModules(repo: string, worktree: string): void {
-	const src = path.join(repo, "node_modules");
-	const dst = path.join(worktree, "node_modules");
-	try {
-		if (fs.existsSync(src) && !fs.existsSync(dst)) fs.symlinkSync(src, dst, "junction");
-	} catch {
-		// A missing link only matters for gates that need installed deps.
-	}
-}
 
 function writePatch(taskId: string, tier: string, patch: string): string | null {
 	if (!patch.trim()) return null;
@@ -169,7 +160,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 
 			const base = await addWorktree(repo, `${taskId}-base`);
 			if (!base.ok) throw new Error(`cannot create worktree: ${base.error}`);
-			linkNodeModules(repo, base.path);
+			linkDependencyDirs(repo, base.path);
 			const baseGate = await runShell(input.gate, base.path, timeoutMs, { PI_CASCADE_GATE: "1" });
 			await removeWorktree(repo, base.path);
 			const baselineGreen = baseGate.exitCode === 0;
@@ -234,7 +225,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 				const priced = tierInfo.find((t) => t.tier === tier.id)?.priced ?? true;
 				const wt = await addWorktree(repo, `${taskId}-${tier.id}`);
 				if (!wt.ok) throw new Error(`cannot create worktree for ${tier.id}: ${wt.error}`);
-				linkNodeModules(repo, wt.path);
+				linkDependencyDirs(repo, wt.path);
 
 				const taskText = attemptTask(input.task, input.gate, previous, tier.id);
 				const child = await runChild({ cwd: wt.path, model: tier.model, task: taskText, timeoutMs, signal });
