@@ -1,0 +1,138 @@
+/**
+ * Pure policy: the ladder and the reporting math. No I/O, fully unit-tested.
+ *
+ * Ladder rationale (SKILL.md §5.1): repair on the same cheap tier before
+ * escalating. Most gate failures are fixable by the same model once it sees the
+ * error, and an escalation costs 8x more than a repair attempt.
+ */
+import type { AttemptRow, Outcome, Tier } from "./types.js";
+
+export const DEFAULT_TIER0 = "opencode-go/deepseek-v4.1-flash";
+export const DEFAULT_TIER1 = "opencode-go/kimi-k3";
+
+/** T0 once, T0 once more with the error, then T1. Never more than three attempts. */
+export function planAttempts(tier0 = DEFAULT_TIER0, tier1 = DEFAULT_TIER1): Tier[] {
+	return [
+		{ id: "t0", model: tier0 },
+		{ id: "t0-repair", model: tier0 },
+		{ id: "t1", model: tier1 },
+	];
+}
+
+/** Only a capability failure earns another attempt. ENV/PREEXISTING/TIMEOUT stop. */
+export function shouldContinue(outcome: Outcome): boolean {
+	return outcome === "CAPABILITY_FAIL";
+}
+
+export function escalationTarget(attempts: Tier[], index: number): string | null {
+	return attempts[index + 1]?.id ?? null;
+}
+
+export function errTail(text: string, max = 1200): string {
+	const t = text.trim();
+	return t.length <= max ? t : `…${t.slice(t.length - max)}`;
+}
+
+/** Task text for attempt N: base task first, then the distilled gate error. */
+export function attemptTask(originalTask: string, gate: string, previous: { outcome: Outcome; output: string } | null, tierId: string): string {
+	if (!previous) return originalTask;
+	const why = previous.outcome === "TIMEOUT" ? "the previous attempt timed out" : `the gate \`${gate}\` failed`;
+	const label =
+		tierId === "t0-repair"
+			? `A previous attempt at this task (same model) failed: ${why}.`
+			: `A cheaper model already failed this task: ${why}.`;
+	return [
+		label,
+		"Fix it cleanly from the current base state. Do not weaken, skip, or delete tests.",
+		"",
+		"Gate output (tail):",
+		"```",
+		errTail(previous.output),
+		"```",
+		"",
+		`Original task: ${originalTask}`,
+	].join("\n");
+}
+
+export interface Aggregated {
+	tasks: number;
+	green: number;
+	t0FirstPass: number;
+	repairs: number;
+	escalations: number;
+	preexisting: number;
+	totalCostUsd: number;
+	costPerGreenUsd: number;
+	byTier: Record<string, { attempts: number; passes: number; costUsd: number }>;
+}
+
+/**
+ * One task = one `taskId`. Cost per green task sums every attempt spent on it,
+ * which is the only number the cascade claim can be built on.
+ */
+export function aggregate(rows: AttemptRow[]): Aggregated {
+	const byTask = new Map<string, AttemptRow[]>();
+	for (const r of rows) {
+		const list = byTask.get(r.taskId) ?? [];
+		list.push(r);
+		byTask.set(r.taskId, list);
+	}
+
+	const out: Aggregated = {
+		tasks: byTask.size,
+		green: 0,
+		t0FirstPass: 0,
+		repairs: 0,
+		escalations: 0,
+		preexisting: 0,
+		totalCostUsd: 0,
+		costPerGreenUsd: 0,
+		byTier: {},
+	};
+
+	for (const r of rows) {
+		out.totalCostUsd += r.costUsd;
+		const t = (out.byTier[r.tier] ??= { attempts: 0, passes: 0, costUsd: 0 });
+		t.attempts++;
+		t.costUsd += r.costUsd;
+		if (r.outcome === "PASS") t.passes++;
+	}
+
+	for (const attempts of byTask.values()) {
+		const sorted = [...attempts].sort((a, b) => a.attempt - b.attempt);
+		const first = sorted[0];
+		const last = sorted[sorted.length - 1];
+		if (last?.outcome === "PASS") out.green++;
+		if (first?.outcome === "PASS" && first.tier === "t0") out.t0FirstPass++;
+		if (sorted.some((a) => a.tier === "t0-repair")) out.repairs++;
+		if (sorted.some((a) => a.tier === "t1")) out.escalations++;
+		if (first?.outcome === "PREEXISTING") out.preexisting++;
+	}
+
+	out.costPerGreenUsd = out.green > 0 ? out.totalCostUsd / out.green : 0;
+	return out;
+}
+
+function pct(n: number, d: number): string {
+	return d > 0 ? `${Math.round((n / d) * 100)}%` : "—";
+}
+
+export function formatStats(a: Aggregated): string {
+	const tiers = Object.keys(a.byTier)
+		.sort()
+		.map((k) => `${k}: ${a.byTier[k].attempts} attempts, ${pct(a.byTier[k].passes, a.byTier[k].attempts)} pass, $${a.byTier[k].costUsd.toFixed(5)}`);
+	return [
+		`tasks            ${a.tasks}`,
+		`green            ${a.green}`,
+		`T0 first-pass    ${pct(a.t0FirstPass, a.tasks)}`,
+		`repaired at T0   ${a.repairs}`,
+		`escalated to T1  ${a.escalations}`,
+		`gate red at HEAD ${a.preexisting}`,
+		`total spend      $${a.totalCostUsd.toFixed(5)}`,
+		`$ / green task   $${a.costPerGreenUsd.toFixed(5)}`,
+		"",
+		...tiers,
+		"",
+		"caveat: these are observed runs, not a controlled benchmark.",
+	].join("\n");
+}

@@ -1,17 +1,39 @@
 {
   "name": "@vasanthsaravanan/pi-subagent-cascade",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Gate-verified cheap-to-frontier subagent escalation for pi-subagents, with a JSONL cost ledger.",
   "license": "MIT",
   "type": "module",
-  "keywords": ["pi-package", "pi-extension", "subagent", "model-routing", "cost-optimization"],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "subagent",
+    "model-routing",
+    "cost-optimization"
+  ],
   "pi": {
-    "extensions": ["./src/index.ts"],
-    "skills": ["./skills"]
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
   },
-  "files": ["src", "skills", "README.md", "LICENSE", "CHANGELOG.md"],
+  "files": [
+    "src",
+    "skills",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
+  },
+  "scripts": {
+    "test": "vitest run"
   }
 }
