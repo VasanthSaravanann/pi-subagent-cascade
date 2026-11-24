@@ -73,8 +73,7 @@ export async function capturePatch(worktreePath: string): Promise<string> {
 	return diff.stdout;
 }
 
-export async function removeWorktree(repo: string, worktreePath: string): Promise<void> {
-	await git(repo, ["worktree", "remove", "--force", worktreePath]);
+export async function removeWorktree(repo: string, worktreePath: string): Promise<void> {	await git(repo, ["worktree", "remove", "--force", worktreePath]);
 	await git(repo, ["worktree", "prune"]);
 }
 
@@ -145,4 +144,33 @@ export function linkDependencyDirs(repo: string, worktree: string): string[] {
 			resolve({ exitCode: null, output: `${out}\n${String(e)}`, timedOut });
 		});
 	});
+}
+
+export interface ApplyResult {
+	applied: boolean;
+	reason?: string;
+}
+
+/**
+ * Apply a captured patch to the user's tree — only when that tree is still
+ * clean. The cascade never mutates the working tree behind a user's back:
+ * a dirty tree (or a patch that no longer applies) leaves the file on disk and
+ * says why.
+ */
+export async function applyPatch(repo: string, patchFile: string): Promise<ApplyResult> {
+	const status = await git(repo, ["status", "--porcelain"]);
+	if (status.code !== 0) return { applied: false, reason: `git status failed: ${status.stderr.trim()}` };
+	const dirty = status.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+	if (dirty.length > 0) {
+		return { applied: false, reason: `working tree is not clean (${dirty.length} change(s)); patch left unapplied` };
+	}
+	const check = await git(repo, ["apply", "--check", patchFile]);
+	if (check.code !== 0) {
+		return { applied: false, reason: `patch does not apply to the current HEAD: ${check.stderr.trim() || `exit ${check.code}`}` };
+	}
+	const applied = await git(repo, ["apply", patchFile]);
+	if (applied.code !== 0) {
+		return { applied: false, reason: `git apply failed: ${applied.stderr.trim() || `exit ${applied.code}`}` };
+	}
+	return { applied: true };
 }

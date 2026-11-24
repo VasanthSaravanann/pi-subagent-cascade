@@ -13,8 +13,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { classifyChildSignal, classifyGate, extractErrCode, isDeterministicGate } from "./classify.js";
 import {
 	addWorktree,
-	linkDependencyDirs,
+	applyPatch,
 	capturePatch,
+	linkDependencyDirs,
 	preflight,
 	removeWorktree,
 	runShell,
@@ -302,6 +303,14 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					`  ${r.tier.padEnd(10)} ${r.outcome.padEnd(16)} $${r.costUsd.toFixed(5)}  ${r.errCode ?? ""}`,
 			);
 
+			// Optional in-place apply: only when the user's tree is still clean.
+			let applied: { applied: boolean; reason?: string } | null = null;
+			if (succeeded && input.apply && patchFile) applied = await applyPatch(repo, patchFile);
+
+			const applyLine = applied
+				? [`Applied in place: ${applied.applied ? `yes (${repo})` : `no — ${applied.reason}`}`]
+				: [];
+
 			const body = succeeded
 				? [
 						`Task ${taskId} passed the gate on ${last.tier} after ${rows.length} attempt(s); total $${totalCost.toFixed(5)}.`,
@@ -310,6 +319,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 						...lines,
 						"",
 						patchFile ? `Patch: ${patchFile}\nApply with: git apply ${patchFile}` : "No file changes were produced.",
+						...applyLine,
 					]
 				: [
 						`Task ${taskId} did not pass the gate after ${rows.length} attempt(s); total $${totalCost.toFixed(5)}.`,
@@ -335,15 +345,17 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					})),
 					totalCostUsd: totalCost,
 					patchFile,
+					applied: applied?.applied ?? null,
+					applyNote: applied?.reason,
 					baselineGreen,
 					profile,
 					tiers: tierInfo,
 					windows,
 				},
 			};
-			} finally {
-				releaseLock();
-			}
+		} finally {
+			releaseLock();
+		}
 		},
 	});
 
