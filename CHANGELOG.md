@@ -16,6 +16,12 @@ First release. Scope is deliberately narrow: a gate-verified cascade, real per-a
 - Patch output: a successful run leaves the working tree untouched and returns a patch path.
 - `skills/subagent-router` routing skill.
 
+### Changed
+
+- Default T1 is `opencode-go/deepseek-v4-pro` instead of `kimi-k3`: the same escalation costs `$0.02703` instead of `$0.08412` (measured, same `t1 PASS`).
+- Context-window preflight via `ctx.modelRegistry`; `CONTEXT_FAIL` (`stopReason: "length"`) never escalates, because T1 does not buy a meaningfully larger window.
+- Unpriced providers (no catalog pricing) are recorded as `costKnown: false` and surfaced by `/router-stats` instead of reading as `$0.00`.
+
 ### Known limits
 
 - Smoke-tested on one fixture, not benchmarked. No savings claim.

@@ -40,7 +40,7 @@ Or call it directly with `-p`. The tool needs three things: a task, a gate, and 
 | `gate` | yes | Deterministic command proving the task is done |
 | `expect` | no | `"green"` (default) or `"red"` |
 | `tier0` | no | Cheap model, default `opencode-go/deepseek-v4.1-flash` |
-| `tier1` | no | Frontier model, default `opencode-go/kimi-k3` |
+| `tier1` | no | Frontier model, default `opencode-go/deepseek-v4-pro` |
 | `timeoutMs` | no | Per-attempt deadline, default 8 minutes |
 
 ### `expect` matters
@@ -96,6 +96,7 @@ Each attempt is `pi --mode json -p --no-session --model <tier>` with the working
 - **Your tree must be clean.** Worktrees branch from `HEAD`, so uncommitted work is refused rather than stashed.
 - **The gate runs with your shell.** It is executed as `sh -c <gate>` inside the worktree. Only pass gates you would run yourself.
 - **No learning, no replay, no pinning.** Each call starts from the configured tiers; there is no cross-run adaptation in this version.
+- **Escalation is priced, not naive.** Default T1 is `deepseek-v4-pro` (~4× T0), not the catalog's priciest model: the same escalation measured `$0.08412` on `kimi-k3` and `$0.02703` on `deepseek-v4-pro`, with the same `t1 PASS`. `kimi-k3` is available explicitly, never by default.
 
 ## Design notes
 

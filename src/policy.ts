@@ -8,7 +8,9 @@
 import type { AttemptRow, Outcome, Tier } from "./types.js";
 
 export const DEFAULT_TIER0 = "opencode-go/deepseek-v4.1-flash";
-export const DEFAULT_TIER1 = "opencode-go/kimi-k3";
+// kimi-k3 ($3/$15 per 1M) is 20x T0 and only 5% more context; the pro tier of the
+// same family escalates capability at ~4x T0 instead. kimi stays opt-in.
+export const DEFAULT_TIER1 = "opencode-go/deepseek-v4-pro";
 
 /** T0 once, T0 once more with the error, then T1. Never more than three attempts. */
 export function planAttempts(tier0 = DEFAULT_TIER0, tier1 = DEFAULT_TIER1): Tier[] {
