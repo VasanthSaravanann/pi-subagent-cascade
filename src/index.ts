@@ -19,7 +19,7 @@ import {
 	runShell,
 } from "./isolation.js";
 import { LEDGER_DIR, appendRow, newTaskId, readRows, resetLedger, signature } from "./ledger.js";
-import { DEFAULT_TIER0, DEFAULT_TIER1, aggregate, attemptTask, errTail, formatStats, planAttempts, shouldContinue } from "./policy.js";
+import { DEFAULT_TIER0, DEFAULT_TIER1, aggregate, attemptTask, errTail, formatStats, planAttempts, runLadder } from "./policy.js";
 import { runChild } from "./runner.js";
 import type { AttemptRow, Outcome } from "./types.js";
 
@@ -183,11 +183,9 @@ export default function subagentCascade(pi: ExtensionAPI) {
 			}
 
 			const rows: AttemptRow[] = [];
-			let previous: { outcome: Outcome; output: string } | null = null;
 			let patchFile: string | null = null;
 
-			for (let i = 0; i < tiers.length; i++) {
-				const tier = tiers[i];
+			const steps = await runLadder(tiers, async (tier, i, previous) => {
 				const attemptNo = i + 1;
 				onUpdate?.({
 					content: [{ type: "text", text: `attempt ${attemptNo}/${tiers.length} on ${tier.id} (${tier.model})…` }],
@@ -260,12 +258,12 @@ export default function subagentCascade(pi: ExtensionAPI) {
 				};
 				appendRow(row);
 				rows.push(row);
+				return { outcome, output: gateOutput };
+			});
 
-				if (outcome === "PASS") break;
-				if (!shouldContinue(outcome)) break;
-				previous = { outcome, output: gateOutput };
-			}
-
+			// Same feedback the old inline loop carried: the output of the last
+			// rung that failed with a capability problem, for the summary tail.
+			const fedBack = steps.filter((s) => s.outcome === "CAPABILITY_FAIL").pop();
 			const totalCost = rows.reduce((sum, r) => sum + r.costUsd, 0);
 			const last = rows[rows.length - 1];
 			const succeeded = last?.outcome === "PASS";
@@ -287,7 +285,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 						"",
 						...lines,
 						"",
-						`Last gate output (tail):\n${errTail(previous?.output ?? "", 800)}`,
+						`Last gate output (tail):\n${errTail(fedBack?.output ?? "", 800)}`,
 					];
 
 			return {

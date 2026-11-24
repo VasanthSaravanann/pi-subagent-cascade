@@ -26,6 +26,40 @@ export function shouldContinue(outcome: Outcome): boolean {
 	return outcome === "CAPABILITY_FAIL";
 }
 
+export interface LadderAttemptResult {
+	outcome: Outcome;
+	/** Gate/child output to hand to the next rung as feedback. */
+	output: string;
+}
+
+export interface LadderStep extends LadderAttemptResult {
+	tier: Tier;
+}
+
+export type LadderAttempt = (
+	tier: Tier,
+	index: number,
+	previous: { outcome: Outcome; output: string } | null,
+) => Promise<LadderAttemptResult>;
+
+/**
+ * Sequencing of the ladder, free of I/O: run each rung through the injected
+ * `attempt`, stop on PASS, stop on any outcome that is not CAPABILITY_FAIL,
+ * and pass {outcome, output} forward as the next rung's feedback.
+ */
+export async function runLadder(plan: Tier[], attempt: LadderAttempt): Promise<LadderStep[]> {
+	const steps: LadderStep[] = [];
+	let previous: { outcome: Outcome; output: string } | null = null;
+	for (let i = 0; i < plan.length; i++) {
+		const tier = plan[i];
+		const result = await attempt(tier, i, previous);
+		steps.push({ tier, ...result });
+		if (result.outcome === "PASS" || !shouldContinue(result.outcome)) break;
+		previous = { outcome: result.outcome, output: result.output };
+	}
+	return steps;
+}
+
 export function escalationTarget(attempts: Tier[], index: number): string | null {
 	return attempts[index + 1]?.id ?? null;
 }

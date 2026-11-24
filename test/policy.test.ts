@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { aggregate, attemptTask, errTail, formatStats, planAttempts, shouldContinue } from "../src/policy.js";
-import type { AttemptRow } from "../src/types.js";
+import { aggregate, attemptTask, errTail, formatStats, planAttempts, runLadder, shouldContinue } from "../src/policy.js";
+import type { AttemptRow, Outcome } from "../src/types.js";
 
 const row = (over: Partial<AttemptRow>): AttemptRow => ({
 	ts: "2026-01-01T00:00:00.000Z",
@@ -33,6 +33,73 @@ describe("ladder", () => {
 		for (const o of ["PASS", "ENV_FAIL", "PREEXISTING", "TIMEOUT", "ERROR"] as const) {
 			expect(shouldContinue(o)).toBe(false);
 		}
+	});
+});
+
+/** Fake executor: feeds scripted outcomes, records calls, checks sequencing. */
+function fakeLadder(outcomes: Array<{ outcome: Outcome; output?: string }>) {
+	const calls: Array<{ tier: string; index: number; previous: { outcome: Outcome; output: string } | null }> = [];
+	const plan = planAttempts("cheap", "strong");
+	const run = runLadder(plan, async (tier, index, previous) => {
+		calls.push({ tier: tier.id, index, previous });
+		const next = outcomes[calls.length - 1];
+		if (!next) throw new Error(`ladder ran past the scripted ${outcomes.length} outcomes`);
+		return { outcome: next.outcome, output: next.output ?? `out:${tier.id}` };
+	});
+	return { calls, run, plan };
+}
+
+describe("runLadder", () => {
+	it("stops after one rung when T0 passes first", async () => {
+		const { calls, run } = fakeLadder([{ outcome: "PASS" }]);
+		const steps = await run;
+		expect(steps.map((s) => s.tier.id)).toEqual(["t0"]);
+		expect(calls).toHaveLength(1);
+		expect(calls[0].previous).toBeNull();
+	});
+
+	it("fail then pass runs t0, then t0-repair", async () => {
+		const steps = await fakeLadder([{ outcome: "CAPABILITY_FAIL", output: "AssertionError: 2 == 3" }, { outcome: "PASS" }]).run;
+		expect(steps.map((s) => s.tier.id)).toEqual(["t0", "t0-repair"]);
+	});
+
+	it("fail fail pass runs the full ladder", async () => {
+		const steps = await fakeLadder([
+			{ outcome: "CAPABILITY_FAIL" },
+			{ outcome: "CAPABILITY_FAIL" },
+			{ outcome: "PASS" },
+		]).run;
+		expect(steps.map((s) => s.tier.id)).toEqual(["t0", "t0-repair", "t1"]);
+		expect(steps.at(-1)?.outcome).toBe("PASS");
+	});
+
+	it.each(["ENV_FAIL", "TIMEOUT", "ERROR", "PREEXISTING", "CONTEXT_FAIL"] as const)(
+		"a %s on the first rung stops the ladder at one step",
+		async (outcome) => {
+			const { calls, run } = fakeLadder([{ outcome }]);
+			const steps = await run;
+			expect(steps).toHaveLength(1);
+			expect(calls).toHaveLength(1);
+		},
+	);
+
+	it("passes the previous outcome and output forward", async () => {
+		const { calls, run } = fakeLadder([
+			{ outcome: "CAPABILITY_FAIL", output: "gate said no" },
+			{ outcome: "PASS" },
+		]);
+		await run;
+		expect(calls[1].previous).toEqual({ outcome: "CAPABILITY_FAIL", output: "gate said no" });
+	});
+
+	it("never runs more rungs than the plan has", async () => {
+		const steps = await fakeLadder([
+			{ outcome: "CAPABILITY_FAIL" },
+			{ outcome: "CAPABILITY_FAIL" },
+			{ outcome: "CAPABILITY_FAIL" },
+		]).run;
+		expect(steps).toHaveLength(3);
+		expect(steps.at(-1)?.outcome).toBe("CAPABILITY_FAIL");
 	});
 });
 
