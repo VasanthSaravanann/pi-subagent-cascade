@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregate, attemptTask, errTail, formatStats, planAttempts, resolveProfile, runLadder, shouldContinue } from "../src/policy.js";
+import { aggregate, attemptTask, errTail, formatStats, planAttempts, resolveProfile, resolveTier, runLadder, shouldContinue } from "../src/policy.js";
 import type { AttemptRow, Outcome } from "../src/types.js";
 
 const row = (over: Partial<AttemptRow>): AttemptRow => ({
@@ -48,6 +48,17 @@ function fakeLadder(outcomes: Array<{ outcome: Outcome; output?: string }>) {
 	});
 	return { calls, run, plan };
 }
+
+describe("resolveTier precedence", () => {
+	it("param > env > config > default", () => {
+		expect(resolveTier("param", "env", "cfg", "default")).toBe("param");
+		expect(resolveTier(undefined, "env", "cfg", "default")).toBe("env");
+		expect(resolveTier(undefined, undefined, "cfg", "default")).toBe("cfg");
+		expect(resolveTier(undefined, undefined, undefined, "default")).toBe("default");
+		expect(resolveTier("  ", " env ", undefined, "default")).toBe("env");
+		expect(resolveTier(undefined, "", "", "default")).toBe("default");
+	});
+});
 
 describe("profile", () => {
 	it("resolves param > config > prod", () => {

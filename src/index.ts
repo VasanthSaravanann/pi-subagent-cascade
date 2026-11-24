@@ -19,7 +19,7 @@ import {
 	runShell,
 } from "./isolation.js";
 import { LEDGER_DIR, appendRow, newTaskId, readConfig, readRows, resetLedger, signature } from "./ledger.js";
-import { DEFAULT_TIER0, DEFAULT_TIER1, aggregate, attemptTask, errTail, formatStats, planAttempts, resolveProfile, runLadder } from "./policy.js";
+import { DEFAULT_TIER0, DEFAULT_TIER1, aggregate, attemptTask, errTail, formatStats, planAttempts, resolveProfile, resolveTier, runLadder } from "./policy.js";
 import { runChild } from "./runner.js";
 import type { AttemptRow, Outcome } from "./types.js";
 
@@ -104,7 +104,10 @@ export default function subagentCascade(pi: ExtensionAPI) {
 			const profile = resolveProfile(input.profile, typeof config?.profile === "string" ? config.profile : undefined);
 			const taskId = newTaskId();
 			const sig = signature(input.task, repo);
-			const tiers = planAttempts(input.tier0 ?? DEFAULT_TIER0, input.tier1 ?? DEFAULT_TIER1);
+			// param > env > probed config > compiled default (SKILL §6 resolution order).
+			const tier0Model = resolveTier(input.tier0, process.env.PI_CASCADE_TIER0, typeof config?.tier0 === "string" ? config.tier0 : undefined, DEFAULT_TIER0);
+			const tier1Model = resolveTier(input.tier1, process.env.PI_CASCADE_TIER1, typeof config?.tier1 === "string" ? config.tier1 : undefined, DEFAULT_TIER1);
+			const tiers = planAttempts(tier0Model, tier1Model);
 
 			// A tier that cannot hold a repo-sized context (or has no catalog entry)
 			// is a configuration error, not a model failure. Fail before spending.
@@ -285,6 +288,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 			const body = succeeded
 				? [
 						`Task ${taskId} passed the gate on ${last.tier} after ${rows.length} attempt(s); total $${totalCost.toFixed(5)}.`,
+						`Tiers: t0=${tier0Model} t1=${tier1Model} (profile ${profile}).`,
 						"",
 						...lines,
 						"",
@@ -292,6 +296,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					]
 				: [
 						`Task ${taskId} did not pass the gate after ${rows.length} attempt(s); total $${totalCost.toFixed(5)}.`,
+						`Tiers: t0=${tier0Model} t1=${tier1Model} (profile ${profile}).`,
 						"",
 						...lines,
 						"",

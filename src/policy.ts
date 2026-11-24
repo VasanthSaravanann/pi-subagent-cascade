@@ -29,6 +29,20 @@ export function profileOf(row: AttemptRow): Profile {
 	return row.profile ?? "prod";
 }
 
+/**
+ * Tier model resolution: tool param > env (PI_CASCADE_TIER0/1) > probed
+ * config.json > compiled default. Empty strings count as absent; a missing
+ * config is normal, not an error.
+ */
+export function resolveTier(
+	param: string | undefined,
+	env: string | undefined,
+	config: string | undefined,
+	fallback: string,
+): string {
+	return param?.trim() || env?.trim() || config?.trim() || fallback;
+}
+
 export const DEFAULT_TIER0 = "opencode-go/deepseek-v4.1-flash";
 // kimi-k3 ($3/$15 per 1M) is 20x T0 and only 5% more context; the pro tier of the
 // same family escalates capability at ~4x T0 instead. kimi stays opt-in.
