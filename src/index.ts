@@ -18,7 +18,7 @@ import {
 	removeWorktree,
 	runShell,
 } from "./isolation.js";
-import { LEDGER_DIR, appendRow, newTaskId, readConfig, readRows, resetLedger, signature } from "./ledger.js";
+import { LEDGER_DIR, acquireLock, appendRow, newTaskId, readConfig, readRows, releaseLock, resetLedger, signature } from "./ledger.js";
 import { DEFAULT_TIER0, DEFAULT_TIER1, aggregate, attemptTask, errTail, formatStats, planAttempts, resolveCostCeiling, resolveProfile, resolveTier, runLadder, spendInWindow } from "./policy.js";
 import { runChild } from "./runner.js";
 import type { AttemptRow, Outcome } from "./types.js";
@@ -124,6 +124,16 @@ export default function subagentCascade(pi: ExtensionAPI) {
 			const tier0Model = resolveTier(input.tier0, process.env.PI_CASCADE_TIER0, typeof config?.tier0 === "string" ? config.tier0 : undefined, DEFAULT_TIER0);
 			const tier1Model = resolveTier(input.tier1, process.env.PI_CASCADE_TIER1, typeof config?.tier1 === "string" ? config.tier1 : undefined, DEFAULT_TIER1);
 			const tiers = planAttempts(tier0Model, tier1Model);
+
+			// Single-flight: one cascade at a time per machine, so two runs
+			// cannot fight over the same repo or the same probe budget.
+			const lock = acquireLock(taskId);
+			if (!lock.ok) {
+				throw new Error(
+					`another cascade holds the run lock: pid ${lock.holder?.pid}, task ${lock.holder?.taskId}, started ${lock.holder?.startedAt}. This call spent nothing; retry after it finishes or remove ${lock.path}.`,
+				);
+			}
+			try {
 
 			// A tier that cannot hold a repo-sized context (or has no catalog entry)
 			// is a configuration error, not a model failure. Fail before spending.
@@ -340,6 +350,9 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					windows,
 				},
 			};
+			} finally {
+				releaseLock();
+			}
 		},
 	});
 

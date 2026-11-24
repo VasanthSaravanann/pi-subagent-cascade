@@ -53,6 +53,84 @@ export function resetLedger(): void {
 	fs.writeFileSync(LEDGER_PATH, "", "utf8");
 }
 
+export interface LockHolder {
+	pid: number;
+	taskId: string;
+	startedAt: string;
+}
+
+const LOCK_NAME = "lock";
+
+function pidAlive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (e) {
+		// EPERM means the pid exists and belongs to someone else: still alive.
+		return (e as NodeJS.ErrnoException).code === "EPERM";
+	}
+}
+
+/**
+ * Single-flight lock per cascade run. Created with `wx` so two dispatchers
+ * cannot both win. A live holder's pid refuses with its info; a dead pid
+ * (killed run) is reclaimed. Guards against two cascades fighting over the
+ * same repo — worktree names are already unique per task.
+ */
+export function acquireLock(
+	taskId: string,
+	opts: { pid?: number; dir?: string } = {},
+): { ok: boolean; holder?: LockHolder; path: string } {
+	const dir = opts.dir ?? LEDGER_DIR;
+	const pid = opts.pid ?? process.pid;
+	const file = path.join(dir, LOCK_NAME);
+	const write = () => {
+		fs.writeFileSync(
+			file,
+			`${JSON.stringify({ pid, taskId, startedAt: new Date().toISOString() } satisfies LockHolder)}\n`,
+			{ mode: 0o600 },
+		);
+	};
+	try {
+		fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+		fs.writeFileSync(file, "", { flag: "wx" });
+		write();
+		return { ok: true, path: file };
+	} catch (e) {
+		if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+	}
+	let holder: LockHolder | undefined;
+	try {
+		const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+		if (parsed && typeof parsed.pid === "number") holder = parsed as LockHolder;
+	} catch {
+		// Torn or empty lock file: treat as stale.
+	}
+	if (holder && pidAlive(holder.pid)) return { ok: false, holder, path: file };
+	try {
+		fs.rmSync(file, { force: true });
+		fs.writeFileSync(file, "", { flag: "wx" });
+		write();
+		return { ok: true, path: file };
+	} catch {
+		// Lost the reclaim race: report whoever holds it now.
+		try {
+			const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+			return { ok: false, holder: parsed as LockHolder, path: file };
+		} catch {
+			return { ok: false, holder, path: file };
+		}
+	}
+}
+
+export function releaseLock(opts: { dir?: string } = {}): void {
+	try {
+		fs.rmSync(path.join(opts.dir ?? LEDGER_DIR, LOCK_NAME), { force: true });
+	} catch {
+		/* best effort */
+	}
+}
+
 export function newTaskId(now = Date.now(), rand = Math.random): string {
 	return `${now.toString(36)}-${Math.floor(rand() * 0xffff).toString(16).padStart(4, "0")}`;
 }
