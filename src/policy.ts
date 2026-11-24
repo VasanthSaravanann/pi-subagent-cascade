@@ -56,6 +56,8 @@ export function attemptTask(originalTask: string, gate: string, previous: { outc
 
 export interface Aggregated {
 	tasks: number;
+	/** Tasks that actually reached a model (excludes PREEXISTING-only tasks). */
+	routed: number;
 	green: number;
 	t0FirstPass: number;
 	repairs: number;
@@ -80,6 +82,7 @@ export function aggregate(rows: AttemptRow[]): Aggregated {
 
 	const out: Aggregated = {
 		tasks: byTask.size,
+		routed: 0,
 		green: 0,
 		t0FirstPass: 0,
 		repairs: 0,
@@ -107,6 +110,7 @@ export function aggregate(rows: AttemptRow[]): Aggregated {
 		if (sorted.some((a) => a.tier === "t0-repair")) out.repairs++;
 		if (sorted.some((a) => a.tier === "t1")) out.escalations++;
 		if (first?.outcome === "PREEXISTING") out.preexisting++;
+		if (sorted.some((a) => a.tier !== "baseline")) out.routed++;
 	}
 
 	out.costPerGreenUsd = out.green > 0 ? out.totalCostUsd / out.green : 0;
@@ -122,9 +126,9 @@ export function formatStats(a: Aggregated): string {
 		.sort()
 		.map((k) => `${k}: ${a.byTier[k].attempts} attempts, ${pct(a.byTier[k].passes, a.byTier[k].attempts)} pass, $${a.byTier[k].costUsd.toFixed(5)}`);
 	return [
-		`tasks            ${a.tasks}`,
+		`tasks            ${a.tasks} (${a.routed} routed)`,
 		`green            ${a.green}`,
-		`T0 first-pass    ${pct(a.t0FirstPass, a.tasks)}`,
+		`T0 first-pass    ${pct(a.t0FirstPass, a.routed)}`,
 		`repaired at T0   ${a.repairs}`,
 		`escalated to T1  ${a.escalations}`,
 		`gate red at HEAD ${a.preexisting}`,

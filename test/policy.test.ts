@@ -75,6 +75,7 @@ describe("aggregate", () => {
 	it("counts tasks, first-pass, repairs and escalations", () => {
 		const a = aggregate(rows);
 		expect(a.tasks).toBe(3);
+		expect(a.routed).toBe(3);
 		expect(a.green).toBe(3);
 		expect(a.t0FirstPass).toBe(1);
 		expect(a.repairs).toBe(2);
@@ -96,6 +97,7 @@ describe("aggregate", () => {
 	it("separates preexisting from capability", () => {
 		const a = aggregate([row({ taskId: "p", tier: "baseline", attempt: 0, outcome: "PREEXISTING", costUsd: 0 })]);
 		expect(a.preexisting).toBe(1);
+		expect(a.routed).toBe(0);
 		expect(a.t0FirstPass).toBe(0);
 	});
 

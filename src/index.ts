@@ -278,17 +278,23 @@ export default function subagentCascade(pi: ExtensionAPI) {
 	pi.registerCommand("router-stats", {
 		description: "Show cascade ledger stats. Use `router-stats reset` to clear.",
 		handler: async (args, ctx) => {
+			// notify() only renders in the TUI; print for scripted runs so the
+			// command is verifiable from `pi -p` and CI.
+			const emit = (text: string) => {
+				if (ctx.hasUI) ctx.ui.notify(text, "info");
+				else process.stderr.write(`${text}\n`);
+			};
 			if (args.trim() === "reset") {
 				resetLedger();
-				ctx.ui.notify("Cascade ledger cleared.", "info");
+				emit("Cascade ledger cleared.");
 				return;
 			}
 			const rows = readRows();
 			if (rows.length === 0) {
-				ctx.ui.notify("No cascade runs recorded yet.", "info");
+				emit("No cascade runs recorded yet.");
 				return;
 			}
-			ctx.ui.notify(formatStats(aggregate(rows)), "info");
+			emit(formatStats(aggregate(rows)));
 		},
 	});
 }
