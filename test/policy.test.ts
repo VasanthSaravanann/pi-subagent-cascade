@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregate, attemptTask, errTail, formatStats, planAttempts, runLadder, shouldContinue } from "../src/policy.js";
+import { aggregate, attemptTask, errTail, formatStats, planAttempts, resolveProfile, runLadder, shouldContinue } from "../src/policy.js";
 import type { AttemptRow, Outcome } from "../src/types.js";
 
 const row = (over: Partial<AttemptRow>): AttemptRow => ({
@@ -48,6 +48,40 @@ function fakeLadder(outcomes: Array<{ outcome: Outcome; output?: string }>) {
 	});
 	return { calls, run, plan };
 }
+
+describe("profile", () => {
+	it("resolves param > config > prod", () => {
+		expect(resolveProfile("dev", "max")).toBe("dev");
+		expect(resolveProfile(undefined, "dev")).toBe("dev");
+		expect(resolveProfile(undefined, undefined)).toBe("prod");
+		expect(resolveProfile("nonsense", "also-nonsense")).toBe("prod");
+		expect(resolveProfile("MAX")).toBe("max");
+	});
+
+	it("keeps credit-funded dev attempts out of every dollar figure", () => {
+		const a = aggregate([
+			row({ taskId: "d", profile: "dev", outcome: "PASS", costUsd: 0, costKnown: false }),
+			row({ taskId: "p", profile: "prod", outcome: "PASS", costUsd: 0.01 }),
+		]);
+		expect(a.devAttempts).toBe(1);
+		expect(a.tasks).toBe(1);
+		expect(a.green).toBe(1);
+		expect(a.totalCostUsd).toBeCloseTo(0.01, 6);
+		expect(a.costPerGreenUsd).toBeCloseTo(0.01, 6);
+		expect(formatStats(a)).toContain("credit-funded");
+	});
+
+	it("stays quiet when nothing ran on credits", () => {
+		expect(formatStats(aggregate([row({ taskId: "p" })]))).not.toContain("credit-funded");
+		expect(aggregate([row({ taskId: "p" })]).devAttempts).toBe(0);
+	});
+
+	it("reads legacy rows without a profile as prod", () => {
+		const a = aggregate([row({ taskId: "legacy", costUsd: 0.02 })]);
+		expect(a.tasks).toBe(1);
+		expect(a.devAttempts).toBe(0);
+	});
+});
 
 describe("runLadder", () => {
 	it("stops after one rung when T0 passes first", async () => {

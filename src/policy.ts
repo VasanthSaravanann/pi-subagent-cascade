@@ -7,6 +7,28 @@
  */
 import type { AttemptRow, Outcome, Tier } from "./types.js";
 
+export type Profile = "dev" | "prod" | "max";
+export const PROFILES: Profile[] = ["dev", "prod", "max"];
+
+/**
+ * Spend pool for a run: tool param first, then the probed config's profile,
+ * then `prod`. `dev` marks credit-funded runs so `/router-stats` can keep
+ * them out of every dollar number.
+ */
+export function resolveProfile(param?: string, configFile?: string): Profile {
+	for (const candidate of [param, configFile]) {
+		if (!candidate) continue;
+		const p = candidate.toLowerCase() as Profile;
+		if (PROFILES.includes(p)) return p;
+	}
+	return "prod";
+}
+
+/** Rows predating the field are all paid opencode-go runs; read them as prod. */
+export function profileOf(row: AttemptRow): Profile {
+	return row.profile ?? "prod";
+}
+
 export const DEFAULT_TIER0 = "opencode-go/deepseek-v4.1-flash";
 // kimi-k3 ($3/$15 per 1M) is 20x T0 and only 5% more context; the pro tier of the
 // same family escalates capability at ~4x T0 instead. kimi stays opt-in.
@@ -101,17 +123,23 @@ export interface Aggregated {
 	preexisting: number;
 	totalCostUsd: number;
 	costPerGreenUsd: number;
+	/** Provider publishes no pricing on a paid (non-dev) attempt: unknown, not free. */
 	unknownCost: number;
+	/** Attempts from credit-funded `dev` runs; excluded from every dollar figure. */
+	devAttempts: number;
 	byTier: Record<string, { attempts: number; passes: number; costUsd: number }>;
 }
 
 /**
  * One task = one `taskId`. Cost per green task sums every attempt spent on it,
- * which is the only number the cascade claim can be built on.
+ * which is the only number the cascade claim can be built on. Dollar figures
+ * and task counters cover paid profiles only; `dev` attempts are counted
+ * separately so credits can never masquerade as savings.
  */
 export function aggregate(rows: AttemptRow[]): Aggregated {
+	const paid = rows.filter((r) => profileOf(r) !== "dev");
 	const byTask = new Map<string, AttemptRow[]>();
-	for (const r of rows) {
+	for (const r of paid) {
 		const list = byTask.get(r.taskId) ?? [];
 		list.push(r);
 		byTask.set(r.taskId, list);
@@ -128,10 +156,11 @@ export function aggregate(rows: AttemptRow[]): Aggregated {
 		totalCostUsd: 0,
 		costPerGreenUsd: 0,
 		unknownCost: 0,
+		devAttempts: rows.length - paid.length,
 		byTier: {},
 	};
 
-	for (const r of rows) {
+	for (const r of paid) {
 		out.totalCostUsd += r.costUsd;
 		if (r.costKnown === false) out.unknownCost++;
 		const t = (out.byTier[r.tier] ??= { attempts: 0, passes: 0, costUsd: 0 });
@@ -173,7 +202,10 @@ export function formatStats(a: Aggregated): string {
 		`gate red at HEAD ${a.preexisting}`,
 		`total spend      $${a.totalCostUsd.toFixed(5)}`,
 		`$ / green task   $${a.costPerGreenUsd.toFixed(5)}`,
-		...(a.unknownCost > 0 ? [`cost unknown     ${a.unknownCost} attempt(s) — provider publishes no pricing; those rows count as $0`] : []),
+		...(a.unknownCost > 0 ? [`cost unknown     ${a.unknownCost} attempt(s) — paid profile, provider publishes no pricing; counted as $0`] : []),
+		...(a.devAttempts > 0
+			? [`dev attempts     ${a.devAttempts} — credit-funded (dev profile), excluded from every dollar figure above`]
+			: []),
 		"",
 		...tiers,
 		"",

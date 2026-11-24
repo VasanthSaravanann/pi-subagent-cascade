@@ -18,8 +18,8 @@ import {
 	removeWorktree,
 	runShell,
 } from "./isolation.js";
-import { LEDGER_DIR, appendRow, newTaskId, readRows, resetLedger, signature } from "./ledger.js";
-import { DEFAULT_TIER0, DEFAULT_TIER1, aggregate, attemptTask, errTail, formatStats, planAttempts, runLadder } from "./policy.js";
+import { LEDGER_DIR, appendRow, newTaskId, readConfig, readRows, resetLedger, signature } from "./ledger.js";
+import { DEFAULT_TIER0, DEFAULT_TIER1, aggregate, attemptTask, errTail, formatStats, planAttempts, resolveProfile, runLadder } from "./policy.js";
 import { runChild } from "./runner.js";
 import type { AttemptRow, Outcome } from "./types.js";
 
@@ -39,6 +39,11 @@ const parameters = Type.Object({
 				'Whether the gate is expected to be green at HEAD. "green" (default) for changes that must not break anything, "red" when the task is to make a currently failing gate pass.',
 		}),
 	),
+	profile: Type.Optional(
+		Type.String({
+			description: 'Spend pool: "dev" (credit-funded fixtures), "prod" (default, paid), "max" (opt-in strongest). Recorded on every ledger row; dev rows never enter dollar stats.',
+		}),
+	),
 });
 
 type Params = {
@@ -48,6 +53,7 @@ type Params = {
 	tier1?: string;
 	timeoutMs?: number;
 	expect?: string;
+	profile?: string;
 };
 
 function linkNodeModules(repo: string, worktree: string): void {
@@ -94,6 +100,8 @@ export default function subagentCascade(pi: ExtensionAPI) {
 			const pre = await preflight(repoInput);
 			if (!pre.ok || !pre.repo) throw new Error(`preflight failed: ${pre.reason}`);
 			const repo = pre.repo;
+			const config = readConfig();
+			const profile = resolveProfile(input.profile, typeof config?.profile === "string" ? config.profile : undefined);
 			const taskId = newTaskId();
 			const sig = signature(input.task, repo);
 			const tiers = planAttempts(input.tier0 ?? DEFAULT_TIER0, input.tier1 ?? DEFAULT_TIER1);
@@ -167,6 +175,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					durationMs: 0,
 					costUsd: 0,
 					costKnown: true,
+					profile,
 					tokens: { input: 0, output: 0, cacheRead: 0 },
 					errTail: errTail(baseGate.output, 200),
 				};
@@ -252,6 +261,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					durationMs: Date.now() - started,
 					costUsd: priced ? child.costUsd : 0,
 					costKnown: priced,
+					profile,
 					tokens: child.tokens,
 					patchFile,
 					escalatedTo: outcome === "CAPABILITY_FAIL" ? (tiers[i + 1]?.id ?? null) : null,
@@ -304,6 +314,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					totalCostUsd: totalCost,
 					patchFile,
 					baselineGreen,
+					profile,
 					tiers: tierInfo,
 					windows,
 				},

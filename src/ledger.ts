@@ -11,6 +11,18 @@ import type { AttemptRow } from "./types.js";
 
 export const LEDGER_DIR = path.join(os.homedir(), ".pi", "agent", "cascade");
 export const LEDGER_PATH = path.join(LEDGER_DIR, "ledger.jsonl");
+export const CONFIG_PATH = path.join(LEDGER_DIR, "config.json");
+
+/** Written by scripts/probe-models.mjs; absent config is normal, not an error. */
+export function readConfig(file = CONFIG_PATH): Record<string, unknown> | null {
+	try {
+		if (!fs.existsSync(file)) return null;
+		const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+		return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+	} catch {
+		return null;
+	}
+}
 
 function ensureDir(): void {
 	fs.mkdirSync(LEDGER_DIR, { recursive: true, mode: 0o700 });

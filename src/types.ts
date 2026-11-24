@@ -41,6 +41,12 @@ export interface AttemptRow {
 	costUsd: number;
 	/** false when the provider publishes no pricing (cost is unknown, not free). */
 	costKnown: boolean;
+	/**
+	 * Which spend pool the attempt came from. `dev` runs are credit-funded
+	 * (adaption) and must never be averaged into dollar claims. Rows without a
+	 * profile predate the field and are read as `prod`.
+	 */
+	profile?: "dev" | "prod" | "max";
 	tokens: { input: number; output: number; cacheRead: number };
 	patchFile?: string | null;
 	escalatedTo?: string | null;
