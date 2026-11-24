@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregate, attemptTask, errTail, formatStats, planAttempts, resolveProfile, resolveTier, runLadder, shouldContinue } from "../src/policy.js";
+import { aggregate, attemptTask, errTail, formatStats, planAttempts, resolveCostCeiling, resolveProfile, resolveTier, runLadder, shouldContinue, spendInWindow } from "../src/policy.js";
 import type { AttemptRow, Outcome } from "../src/types.js";
 
 const row = (over: Partial<AttemptRow>): AttemptRow => ({
@@ -48,6 +48,38 @@ function fakeLadder(outcomes: Array<{ outcome: Outcome; output?: string }>) {
 	});
 	return { calls, run, plan };
 }
+
+describe("cost ceiling", () => {
+	const now = Date.parse("2026-01-02T12:00:00.000Z");
+	const rows = [
+		row({ repo: "/a", costUsd: 0.4, ts: "2026-01-02T00:00:00.000Z" }),
+		row({ repo: "/a", costUsd: 0.35, ts: "2026-01-01T13:00:00.000Z" }), // 23h old — inside
+		row({ repo: "/a", costUsd: 5.0, ts: "2026-01-01T11:00:00.000Z" }), // 25h old — outside
+		row({ repo: "/b", costUsd: 0.9, ts: "2026-01-02T10:00:00.000Z" }),
+		row({ repo: "/a", costUsd: 9.9, ts: "garbage" }),
+		row({ repo: "/a", costUsd: 9.9, ts: "2026-01-03T10:00:00.000Z" }), // future — ignored
+	];
+
+	it("sums only this repo inside the trailing 24h, parsing ts as a date", () => {
+		expect(spendInWindow(rows, "/a", now)).toBeCloseTo(0.75, 6);
+	});
+
+	it("separates repos", () => {
+		expect(spendInWindow(rows, "/b", now)).toBeCloseTo(0.9, 6);
+	});
+
+	it("honours a custom window", () => {
+		expect(spendInWindow(rows, "/a", now, 13 * 60 * 60 * 1000)).toBeCloseTo(0.4, 6);
+	});
+
+	it("resolves param > env > $1.00 and ignores junk", () => {
+		expect(resolveCostCeiling(2.5, "9")).toBe(2.5);
+		expect(resolveCostCeiling(undefined, "0.5")).toBe(0.5);
+		expect(resolveCostCeiling(undefined, undefined)).toBe(1.0);
+		expect(resolveCostCeiling(undefined, "not-a-number")).toBe(1.0);
+		expect(resolveCostCeiling(0, "-1")).toBe(1.0);
+	});
+});
 
 describe("resolveTier precedence", () => {
 	it("param > env > config > default", () => {

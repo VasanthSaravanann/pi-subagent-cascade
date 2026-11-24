@@ -19,7 +19,7 @@ import {
 	runShell,
 } from "./isolation.js";
 import { LEDGER_DIR, appendRow, newTaskId, readConfig, readRows, resetLedger, signature } from "./ledger.js";
-import { DEFAULT_TIER0, DEFAULT_TIER1, aggregate, attemptTask, errTail, formatStats, planAttempts, resolveProfile, resolveTier, runLadder } from "./policy.js";
+import { DEFAULT_TIER0, DEFAULT_TIER1, aggregate, attemptTask, errTail, formatStats, planAttempts, resolveCostCeiling, resolveProfile, resolveTier, runLadder, spendInWindow } from "./policy.js";
 import { runChild } from "./runner.js";
 import type { AttemptRow, Outcome } from "./types.js";
 
@@ -44,6 +44,11 @@ const parameters = Type.Object({
 			description: 'Spend pool: "dev" (credit-funded fixtures), "prod" (default, paid), "max" (opt-in strongest). Recorded on every ledger row; dev rows never enter dollar stats.',
 		}),
 	),
+	maxCostUsd: Type.Optional(
+		Type.Number({
+			description: "Dollar ceiling for this repo over the trailing 24h UTC. Default: env PI_CASCADE_MAX_COST_USD, else 1.00. Refuses dispatch when already exceeded.",
+		}),
+	),
 });
 
 type Params = {
@@ -54,6 +59,7 @@ type Params = {
 	timeoutMs?: number;
 	expect?: string;
 	profile?: string;
+	maxCostUsd?: number;
 };
 
 function linkNodeModules(repo: string, worktree: string): void {
@@ -102,6 +108,16 @@ export default function subagentCascade(pi: ExtensionAPI) {
 			const repo = pre.repo;
 			const config = readConfig();
 			const profile = resolveProfile(input.profile, typeof config?.profile === "string" ? config.profile : undefined);
+
+			// Cost ceiling for unattended runs: refuse before spending anything,
+			// on the observed 24h UTC total for this repo. Never write a row.
+			const ceiling = resolveCostCeiling(input.maxCostUsd, process.env.PI_CASCADE_MAX_COST_USD);
+			const spent24h = spendInWindow(readRows(), repo, Date.now());
+			if (spent24h >= ceiling) {
+				throw new Error(
+					`refusing to dispatch: $${spent24h.toFixed(5)} spent on ${repo} in the last 24h, ceiling $${ceiling} (maxCostUsd / PI_CASCADE_MAX_COST_USD). Nothing was spent and no row was written.`,
+				);
+			}
 			const taskId = newTaskId();
 			const sig = signature(input.task, repo);
 			// param > env > probed config > compiled default (SKILL §6 resolution order).

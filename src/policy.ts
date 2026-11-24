@@ -43,6 +43,36 @@ export function resolveTier(
 	return param?.trim() || env?.trim() || config?.trim() || fallback;
 }
 
+/**
+ * Dollars spent on one repo inside the trailing UTC window (default 24 h).
+ * Ledger `ts` is UTC ISO and must be parsed as a date: a local-date prefix
+ * filter silently reads $0.00 (verified failure, SKILL §10).
+ */
+export function spendInWindow(
+	rows: AttemptRow[],
+	repo: string,
+	nowMs: number,
+	windowMs = 24 * 60 * 60 * 1000,
+): number {
+	const from = nowMs - windowMs;
+	let sum = 0;
+	for (const r of rows) {
+		if (r.repo !== repo) continue;
+		const t = Date.parse(r.ts);
+		if (Number.isNaN(t) || t < from || t > nowMs) continue;
+		sum += r.costUsd;
+	}
+	return sum;
+}
+
+/** Ceiling resolution: tool param > env PI_CASCADE_MAX_COST_USD > $1.00. */
+export function resolveCostCeiling(param: number | undefined, env: string | undefined): number {
+	if (param !== undefined && Number.isFinite(param) && param > 0) return param;
+	const n = Number(env);
+	if (Number.isFinite(n) && n > 0) return n;
+	return 1.0;
+}
+
 export const DEFAULT_TIER0 = "opencode-go/deepseek-v4.1-flash";
 // kimi-k3 ($3/$15 per 1M) is 20x T0 and only 5% more context; the pro tier of the
 // same family escalates capability at ~4x T0 instead. kimi stays opt-in.
