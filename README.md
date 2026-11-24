@@ -42,6 +42,41 @@ Or call it directly with `-p`. The tool needs three things: a task, a gate, and 
 | `tier0` | no | Cheap model, default `opencode-go/deepseek-v4.1-flash` |
 | `tier1` | no | Frontier model, default `opencode-go/deepseek-v4-pro` |
 | `timeoutMs` | no | Per-attempt deadline, default 8 minutes |
+| `profile` | no | `"dev"` (credit-funded), `"prod"` (default), `"max"` |
+| `maxCostUsd` | no | Ceiling for this repo over the trailing 24 h; default `$1.00` |
+| `apply` | no | Patch the clean source tree on success (default `false`) |
+
+### Tier resolution
+
+`tier0`/`tier1` resolve in this order, first non-empty wins:
+
+1. the tool parameter,
+2. `PI_CASCADE_TIER0` / `PI_CASCADE_TIER1` from the environment,
+3. `~/.pi/agent/cascade/config.json` (written by the probe below),
+4. the compiled default.
+
+A missing config is normal, not an error. A model that is absent from the catalog, or has a context window under 64k, refuses the call **before** anything is spent.
+
+```bash
+node scripts/probe-models.mjs            # prod: paid, ≥16k output, priced
+node scripts/probe-models.mjs --profile dev
+```
+
+The probe pings each candidate through `pi` (60 s deadline), records `contextWindow`, `maxTokens` and `priced` per candidate, and writes `config.json` with mode `0600`. It refuses to promote an unpriced or `<16384`-output model to primary — `adaption/*` is a credit-funded **dev** profile, never a silent production swap — and it exits non-zero without touching a working config.
+
+### Spend ceiling and lock
+
+The ceiling sums ledger cost **for the same repo over the trailing 24 h of UTC** before dispatch; over budget it refuses with the observed total and writes no row. Never compute that window from a local date — the ledger is UTC and a local-date filter silently reads `$0.00`.
+
+```bash
+PI_CASCADE_MAX_COST_USD=0.50            # per-repo, trailing 24 h
+```
+
+A single-flight lock at `~/.pi/agent/cascade/lock` holding `{pid, taskId, startedAt}` stops two cascades running at once. A live pid refuses with the holder's info; a dead pid is reclaimed.
+
+### Applying the patch
+
+With `apply: true` the patch is applied **only** if the source tree is still clean, and the output says whether it was applied. Preflight already refuses a dirty tree, so this guard covers the window during a run: a tree that went dirty in the meantime leaves the patch on disk with a reason.
 
 ### `expect` matters
 
@@ -94,8 +129,10 @@ The shipped skill is trigger-verified in both directions: a read-only prompt ("e
 ## Limitations (read before trusting a number)
 
 - **Smoke-tested, not benchmarked.** The published checks cover one `node --test` fixture where T0 succeeded first try, plus unit tests for classification, the ladder, aggregation and the ledger. The escalation and repair paths are exercised by unit tests, not by a multi-repo benchmark. There is no savings claim in this release.
-- **Gitignored files are missing from the worktree.** Only `node_modules` is symlinked in. A gate that needs `.env`, a local config, or a compiled artifact will fail; run the gate in a way that does not depend on them.
+- **Gitignored files are missing from the worktree.** `node_modules`, `.venv`, `venv`, `target` and `vendor` are symlinked in; plain gitignored files (`.env`, local config, build output) are not. A gate that needs one will fail; run the gate in a way that does not depend on them.
 - **Your tree must be clean.** Worktrees branch from `HEAD`, so uncommitted work is refused rather than stashed.
+- **One cascade at a time.** A single-flight lock serialises runs; a concurrent call is refused rather than queued.
+- **Dollar figures exclude credit runs.** `dev`-profile rows are counted separately and never enter total spend or `$ / green task`.
 - **The gate runs with your shell.** It is executed as `sh -c <gate>` inside the worktree. Only pass gates you would run yourself.
 - **No learning, no replay, no pinning.** Each call starts from the configured tiers; there is no cross-run adaptation in this version.
 - **Escalation is priced, not naive.** Default T1 is `deepseek-v4-pro` (~4× T0), not the catalog's priciest model: the same escalation measured `$0.08412` on `kimi-k3` and `$0.02703` on `deepseek-v4-pro`, with the same `t1 PASS`. `kimi-k3` is available explicitly, never by default.
