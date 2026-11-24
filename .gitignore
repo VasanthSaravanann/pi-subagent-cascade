@@ -1,0 +1,25 @@
+# never committed, never published — internal design + planning docs
+/SKILL.md
+/plan.md
+/protocol*.md
+/subagent_routers.md
+/execution-plan.md
+/VERSION.md
+/v[0-9]*.md
+/version*.md
+/docs/
+*.local.md
+
+# build + tooling
+node_modules/
+dist/
+coverage/
+*.tgz
+.tmp/
+*.log
+
+# pi runtime state
+.pi/
+
+# os
+.DS_Store
