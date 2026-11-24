@@ -89,6 +89,8 @@ preflight (clean tree, deterministic gate)
 
 Each attempt is `pi --mode json -p --no-session --model <tier>` with the working directory set to its worktree. The gate runs on the host after the child exits.
 
+The shipped skill is trigger-verified in both directions: a read-only prompt ("explain what src/policy.ts does") does **not** call `routed_subagent`, and a gated repair request in a real repo does.
+
 ## Limitations (read before trusting a number)
 
 - **Smoke-tested, not benchmarked.** The published checks cover one `node --test` fixture where T0 succeeded first try, plus unit tests for classification, the ladder, aggregation and the ledger. The escalation and repair paths are exercised by unit tests, not by a multi-repo benchmark. There is no savings claim in this release.
