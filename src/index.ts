@@ -108,7 +108,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 			const base = await addWorktree(repo, `${taskId}-base`);
 			if (!base.ok) throw new Error(`cannot create worktree: ${base.error}`);
 			linkNodeModules(repo, base.path);
-			const baseGate = await runShell(input.gate, base.path, timeoutMs);
+			const baseGate = await runShell(input.gate, base.path, timeoutMs, { PI_CASCADE_GATE: "1" });
 			await removeWorktree(repo, base.path);
 			const baselineGreen = baseGate.exitCode === 0;
 
@@ -185,8 +185,11 @@ export default function subagentCascade(pi: ExtensionAPI) {
 				} else if (child.spawnError) {
 					outcome = "ERROR";
 					gateOutput = child.spawnError;
+				} else if (/Model\b.*(not found|deprecated)|ModelDeprecated|not found for provider/i.test(child.stderrTail)) {
+					outcome = "ERROR";
+					gateOutput = `tier ${tier.id} model "${tier.model}" is not usable:\n${child.stderrTail}`;
 				} else {
-					const gate = await runShell(input.gate, wt.path, timeoutMs);
+					const gate = await runShell(input.gate, wt.path, timeoutMs, { PI_CASCADE_GATE: "1" });
 					gateExit = gate.exitCode;
 					gateOutput = `${gate.output}\n${child.transcriptTail}`.slice(-8000);
 					// For expect:"red" a red baseline is the goal, so classify normally.
