@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Type } from "typebox";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { classifyChildSignal, classifyGate, extractErrCode } from "./classify.js";
+import { classifyChildSignal, classifyGate, extractErrCode, isDeterministicGate } from "./classify.js";
 import {
 	addWorktree,
 	capturePatch,
@@ -50,8 +50,6 @@ type Params = {
 	expect?: string;
 };
 
-const NONDETERMINISTIC = /(^|\s)(npm run dev|serve|watch)\b|--watch|\bcurl\b|https?:\/\//i;
-
 function linkNodeModules(repo: string, worktree: string): void {
 	const src = path.join(repo, "node_modules");
 	const dst = path.join(worktree, "node_modules");
@@ -87,7 +85,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 				throw new Error(`expect must be "green" or "red", got "${input.expect}"`);
 			}
 
-			if (NONDETERMINISTIC.test(input.gate)) {
+			if (!isDeterministicGate(input.gate)) {
 				throw new Error(
 					`refusing gate \`${input.gate}\`: it looks non-deterministic (watch/serve/network). A cascade needs a gate that fails deterministically.`,
 				);

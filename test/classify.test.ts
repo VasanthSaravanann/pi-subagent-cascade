@@ -3,6 +3,7 @@ import {
 	classifyChildSignal,
 	classifyGate,
 	extractErrCode,
+	isDeterministicGate,
 	isEnvironmentFailure,
 	looksLikeCapabilityFailure,
 } from "../src/classify.js";
@@ -90,4 +91,20 @@ describe("context budget", () => {
 		// CAPABILITY_FAIL may continue the ladder.
 		expect(shouldContinue("CONTEXT_FAIL")).toBe(false);
 	});
+});
+
+describe("isDeterministicGate", () => {
+	it.each(["npm run dev", "npm test -- --watch", "curl http://x", "jest --watch", "serve -s build", "nodemon --watch src"])(
+		"refuses the non-deterministic gate %s",
+		(gate) => {
+			expect(isDeterministicGate(gate)).toBe(false);
+		},
+	);
+
+	it.each(["node --test", "cargo test", "pytest -q", "tsc --noEmit", "sh gate.sh", "npm test", "cargo test --quiet"])(
+		"accepts the deterministic gate %s",
+		(gate) => {
+			expect(isDeterministicGate(gate)).toBe(true);
+		},
+	);
 });

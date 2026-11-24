@@ -91,3 +91,15 @@ export function looksLikeCapabilityFailure(output: string): boolean {
 	if (isEnvironmentFailure(output)) return false;
 	return CODE_PATTERNS.some((re) => re.test(output));
 }
+
+/** Gates that never settle (watchers, servers, network) cannot cascade. */
+const NONDETERMINISTIC = /(^|\s)(npm run dev|serve|watch)\b|--watch|\bcurl\b|https?:\/\//i;
+
+/**
+ * True when a gate command looks deterministic enough to cascade against.
+ * Refusal predicate for `routed_subagent`: a cascade needs a gate that fails
+ * deterministically, so watchers, dev servers and network calls are rejected.
+ */
+export function isDeterministicGate(gate: string): boolean {
+	return !NONDETERMINISTIC.test(gate);
+}
