@@ -122,20 +122,22 @@ preflight (clean tree, deterministic gate)
             └─ T1        frontier model + gate error  → gate
 ```
 
-Each attempt is `pi --mode json -p --no-session --model <tier>` with the working directory set to its worktree. The gate runs on the host after the child exits.
+Each attempt is `pi --mode json -p --no-session --model <tier>` with the working directory set to its worktree. The gate runs on the host after the child exits, with `PI_CASCADE_GATE=1` in its environment — that variable is how a gate can tell a host run from a child running it to check its own work. Any gate with mutable state (counters, fixtures) must use it.
 
 The shipped skill is trigger-verified in both directions: a read-only prompt ("explain what src/policy.ts does") does **not** call `routed_subagent`, and a gated repair request in a real repo does.
 
 ## Limitations (read before trusting a number)
 
-- **Smoke-tested, not benchmarked.** The published checks cover one `node --test` fixture where T0 succeeded first try, plus unit tests for classification, the ladder, aggregation and the ledger. The escalation and repair paths are exercised by unit tests, not by a multi-repo benchmark. There is no savings claim in this release.
+- **Six fixtures, not a benchmark.** Each ladder branch has a reproducible fixture (see Verification), and the unit suite covers classification, the ladder, aggregation, isolation, the lock and the ceiling. The fixtures are synthetic and single-machine. There is no savings claim in this release.
 - **Gitignored files are missing from the worktree.** `node_modules`, `.venv`, `venv`, `target` and `vendor` are symlinked in; plain gitignored files (`.env`, local config, build output) are not. A gate that needs one will fail; run the gate in a way that does not depend on them.
 - **Your tree must be clean.** Worktrees branch from `HEAD`, so uncommitted work is refused rather than stashed.
 - **One cascade at a time.** A single-flight lock serialises runs; a concurrent call is refused rather than queued.
 - **Dollar figures exclude credit runs.** `dev`-profile rows are counted separately and never enter total spend or `$ / green task`.
 - **The gate runs with your shell.** It is executed as `sh -c <gate>` inside the worktree. Only pass gates you would run yourself.
 - **No learning, no replay, no pinning.** Each call starts from the configured tiers; there is no cross-run adaptation in this version.
-- **Escalation is priced, not naive.** Default T1 is `deepseek-v4-pro` (~4× T0), not the catalog's priciest model: the same escalation measured `$0.08412` on `kimi-k3` and `$0.02703` on `deepseek-v4-pro`, with the same `t1 PASS`. `kimi-k3` is available explicitly, never by default.
+- **Escalation is priced, not naive.** Default T1 is `deepseek-v4-pro` (~4× T0), not the catalog's priciest model: the same escalation measured `$0.08412` on `kimi-k3` and `$0.02703` on `deepseek-v4-pro`, with the same `t1 PASS`. `kimi-k3` is available explicitly, never by default (the whole three-rung ladder on `deepseek-v4-pro` measured `$0.02408`).
+- **A timeout can under-report cost.** If the deadline fires before the child emits a usage event, the row records `$0.00` with `costKnown: true`. Treat timeout rows as a floor, not a price.
+- **Repair is not free either.** The repair rung saw the cheapest model spend more on its second look (`$0.019` on one fixture) than on its first (`$0.005`): the gate error adds context and turns.
 
 ## Verification
 
