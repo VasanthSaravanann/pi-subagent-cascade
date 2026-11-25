@@ -94,3 +94,48 @@ describe("applyPatch", () => {
 		expect(res.reason).toContain("does not apply");
 	});
 });
+
+describe("capturePatch", () => {
+	it("does not stage the linked dependency dirs as symlinks", async () => {
+		const base = fs.mkdtempSync(path.join(os.tmpdir(), "cascade-capture-"));
+		const repo = path.join(base, "repo");
+		fs.mkdirSync(repo);
+		await git(repo, ["init", "-q", "."]);
+		await git(repo, ["config", "user.email", "t@t"]);
+		await git(repo, ["config", "user.name", "t"]);
+		fs.writeFileSync(path.join(repo, ".gitignore"), "node_modules/\n");
+		fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
+		fs.mkdirSync(path.join(repo, "node_modules", "dep"), { recursive: true });
+		fs.writeFileSync(path.join(repo, "node_modules", "dep", "index.js"), "export {};\n");
+		await git(repo, ["add", "-A"]);
+		await git(repo, ["commit", "-qm", "base"]);
+
+		const wt = await addWorktree(repo, `capture-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+		expect(wt.ok).toBe(true);
+		linkDependencyDirs(repo, wt.path);
+		fs.writeFileSync(path.join(wt.path, "a.txt"), "two\n");
+		const patch = await capturePatch(wt.path);
+		await removeWorktree(repo, wt.path);
+
+		expect(patch).toContain("a.txt");
+		expect(patch).not.toContain("node_modules");
+	});
+
+	it("still captures a brand-new file", async () => {
+		const base = fs.mkdtempSync(path.join(os.tmpdir(), "cascade-capture-new-"));
+		const repo = path.join(base, "repo");
+		fs.mkdirSync(repo);
+		await git(repo, ["init", "-q", "."]);
+		await git(repo, ["config", "user.email", "t@t"]);
+		await git(repo, ["config", "user.name", "t"]);
+		fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
+		await git(repo, ["add", "-A"]);
+		await git(repo, ["commit", "-qm", "base"]);
+
+		const wt = await addWorktree(repo, `capture-new-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+		fs.writeFileSync(path.join(wt.path, "brand-new.txt"), "hello\n");
+		const patch = await capturePatch(wt.path);
+		await removeWorktree(repo, wt.path);
+		expect(patch).toContain("brand-new.txt");
+	});
+});

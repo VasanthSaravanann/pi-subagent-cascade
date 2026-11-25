@@ -276,7 +276,7 @@ export default function subagentCascade(pi: ExtensionAPI) {
 					outcome,
 					gate: input.gate,
 					gateExit,
-					errCode: extractErrCode(gateOutput),
+					errCode: outcome === "PASS" ? undefined : extractErrCode(gateOutput),
 					errTail: outcome === "PASS" ? undefined : errTail(gateOutput, 300),
 					baselineGreen,
 					durationMs: Date.now() - started,

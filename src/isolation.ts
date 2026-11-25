@@ -67,8 +67,18 @@ export async function addWorktree(repo: string, id: string, ref = "HEAD"): Promi
 }
 
 /** Full patch including new files: stage everything, then diff the index. */
-export async function capturePatch(worktreePath: string): Promise<string> {
-	await git(worktreePath, ["add", "-A"]);
+/**
+ * Full patch including new files: stage everything, then diff the index.
+ *
+ * Linked dependency directories are excluded from the pathspec: a worktree
+ * carries them as symlinks (B5), and `git add -A` would otherwise stage
+ * `node_modules` as a mode-120000 entry. That patch then fails to apply in any
+ * repo that already has deps (`unable to write file 'node_modules' mode
+ * 120000: Directory not empty`) — verified failure.
+ */
+export async function capturePatch(worktreePath: string, exclude: string[] = LINKED_DIRS): Promise<string> {
+	const pathspec = [".", ...exclude.map((name) => `:(exclude)${name}`)];
+	await git(worktreePath, ["add", "-A", "--", ...pathspec]);
 	const diff = await git(worktreePath, ["diff", "--cached", "--binary"]);
 	return diff.stdout;
 }
