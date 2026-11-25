@@ -2,7 +2,7 @@
 name: subagent-router
 description: Route delegated coding work through cheap-to-frontier model escalation verified by a deterministic gate. Use when a task can be proven done by a shell command (node --test, npm test, pytest, cargo test, tsc --noEmit) and you want a cheap model tried first, with an automatic repair attempt and one escalation to a stronger model. Use it for implementation, bugfix, and refactor work that ends in a runnable check. Do not use it for read-only exploration, code review, research, or any task without a deterministic verification command; for those use the plain subagent tool.
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Subagent cascade router
@@ -14,6 +14,13 @@ metadata:
 - Implementation, bugfix, or refactor **with a runnable gate** → call `routed_subagent` with `gate` set to that exact command.
 - Exploration, review, research, or anything without a deterministic command → plain `subagent`.
 - The user asks for the strongest model up front → plain `subagent` with an explicit `model`.
+
+## Defaults worth knowing
+
+- Tiers resolve: tool param → `PI_CASCADE_TIER0`/`PI_CASCADE_TIER1` → `~/.pi/agent/cascade/config.json` → compiled default. Do not guess a model id; pass one only when the user names it.
+- `maxCostUsd` defaults to `$1.00` per repo per trailing 24 h; over budget the call is refused before spending. Leave it alone unless the user sets a budget.
+- `apply: true` patches the working tree on success, only while it is still clean. Omit it unless the user asks for the change in place; the default returns a patch path.
+- A second concurrent cascade is refused by the run lock. That is expected, not an error to retry in a loop.
 
 ## Choose `expect` correctly
 
