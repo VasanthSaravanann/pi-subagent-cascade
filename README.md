@@ -137,6 +137,29 @@ The shipped skill is trigger-verified in both directions: a read-only prompt ("e
 - **No learning, no replay, no pinning.** Each call starts from the configured tiers; there is no cross-run adaptation in this version.
 - **Escalation is priced, not naive.** Default T1 is `deepseek-v4-pro` (~4× T0), not the catalog's priciest model: the same escalation measured `$0.08412` on `kimi-k3` and `$0.02703` on `deepseek-v4-pro`, with the same `t1 PASS`. `kimi-k3` is available explicitly, never by default.
 
+## Verification
+
+Every branch of the ladder is exercised by a fixture under `fixtures/`, each of which builds a throwaway repo and prints the exact call and assertion. Numbers below are the **observed** ledger rows from one machine on one night — synthetic fixtures, no benchmark, **no savings claim**.
+
+| Fixture | Branch | Rows | Observed |
+|---|---|---|---|
+| `fixtures/rust-t0` | `t0` first pass | 1 | `t0 PASS`, `$0.00229`, patch applies, `cargo test` green |
+| `fixtures/python-repair` | `t0-repair` | 2 | `t0 CAPABILITY_FAIL $0.00270` → `t0-repair PASS $0.00293`, total `$0.00563` |
+| `fixtures/typescript-deps` | deps in worktree | 1 | `t0 PASS $0.00273`, gate `pass 4 / fail 0`, patch carries no `node_modules` |
+| `fixtures/escalation-t1` | `t1` | 3 | `t0 $0.00224` → `t0-repair $0.00328` → `t1 PASS $0.01857` on `deepseek-v4-pro`, total **`$0.02408`** |
+| `fixtures/env-fail` | `ENV_FAIL` | 1 | `ENV_FAIL`, `escalatedTo: null`, `$0.00194` |
+| `fixtures/timeout` | `TIMEOUT` | 1 | `TIMEOUT`, `escalatedTo: null`, wall clock 20.8 s, no orphan process |
+| (baseline) | `PREEXISTING` | 1 | refused at HEAD, `$0` spent |
+
+Run one with:
+
+```bash
+sh fixtures/escalation-t1/setup.sh          # prints the call and the assertion
+cd /tmp/cascade-verify/c4 && pi
+```
+
+Two numbers worth keeping honest: escalating costs roughly **8×** a cheap first attempt (`$0.024` vs `$0.0023`), and a timeout that fires before the child reports usage records **`$0`** — an under-count, not a saving.
+
 ## Design notes
 
 - The runner is a subprocess, not a nested tool call: a custom tool cannot reach `subagent`, and `pi` has no `--cwd` flag.
