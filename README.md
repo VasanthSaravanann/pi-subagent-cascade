@@ -19,7 +19,9 @@ Model routers guess a tier before the work happens. This one observes the result
 pi install npm:@vasanthsaravanan/pi-subagent-cascade
 ```
 
-Requires Pi 1.6+ and a git repository for the work to run in.
+Requires **Pi 1.6+**, **Node 20+**, and a git repository for the work to run in.
+
+**Platform:** macOS and Linux. Windows is not supported — attempts are launched with `sh -c` and killed by process group, and neither behaves the same there.
 
 ## Quickstart
 
@@ -162,10 +164,27 @@ cd /tmp/cascade-verify/c4 && pi
 
 Two numbers worth keeping honest: escalating costs roughly **8×** a cheap first attempt (`$0.024` vs `$0.0023`), and a timeout that fires before the child reports usage records **`$0`** — an under-count, not a saving.
 
+## Security
+
+- **The gate is shell you (or the model) supply.** It runs as `sh -c <gate>` on your machine, inside the attempt worktree, with your environment. Only pass gates you would run yourself, and remember a model proposes the call: review it before approving, or give the tool a fixed gate in a prompt template of your own.
+- **Children inherit your environment,** so any API keys or tokens in your shell are visible to a spawned child. There is no sandbox.
+- **Children run with your permissions** inside a throwaway worktree. They are told not to run git commands or touch files outside it; that is instruction, not enforcement.
+- **The ledger never records source or raw stderr** — only an error code and a bounded tail (≤300 chars).
+- **Nothing is published, committed or pushed by this tool.** A successful run leaves a patch; applying it is a separate, explicit step.
+
 ## Design notes
 
 - The runner is a subprocess, not a nested tool call: a custom tool cannot reach `subagent`, and `pi` has no `--cwd` flag.
 - Classification keys off the gate's exit code, then a bounded output tail. Environment failures (DNS, connection refused, port in use, rate limits, missing binaries) never escalate the model.
 - A task counts as green only if its last attempt passed; `$ per green task` charges every attempt to the task.
+
+## Development
+
+```bash
+npm install
+npm run check        # tsc --noEmit, then vitest (78 tests)
+```
+
+CI runs the same two commands on Ubuntu and macOS (`.github/workflows/check.yml`).
 
 MIT.

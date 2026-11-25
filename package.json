@@ -1,8 +1,9 @@
 {
   "name": "@vasanthsaravanan/pi-subagent-cascade",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Gate-verified cheap-to-frontier subagent escalation for pi-subagents, with a JSONL cost ledger.",
   "license": "MIT",
+  "author": "Vasanth Saravanan",
   "type": "module",
   "keywords": [
     "pi-package",
@@ -11,6 +12,17 @@
     "model-routing",
     "cost-optimization"
   ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VasanthSaravanann/pi-subagent-cascade.git"
+  },
+  "homepage": "https://github.com/VasanthSaravanann/pi-subagent-cascade#readme",
+  "bugs": {
+    "url": "https://github.com/VasanthSaravanann/pi-subagent-cascade/issues"
+  },
   "pi": {
     "extensions": [
       "./src/index.ts"
@@ -33,9 +45,13 @@
     "typebox": "*"
   },
   "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
   }
 }

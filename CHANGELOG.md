@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.1] - 2026-11-25
+
+Publish readiness. No behaviour change beyond one type fix.
+
+### Added
+
+- `npm run typecheck` (`tsc --noEmit`) and `npm run check`, with `typescript` and `@types/node` as dev dependencies.
+- CI at `.github/workflows/check.yml`: Ubuntu and macOS, `npm ci`, typecheck, tests.
+- `Security` and `Development` sections in the README, plus an explicit platform statement.
+
+### Fixed
+
+- `apply` was missing from the tool parameter type, so the shipped v0.2.0 did not typecheck (`Property 'apply' does not exist on type 'Params'`). Runtime was unaffected because vitest strips types without checking them — which is why the typecheck gate now exists.
+
+### Packaging
+
+- `author`, `repository`, `homepage`, `bugs` and `engines` (`node >= 20`) added, so npm and the Pi package gallery can link back to the source.
+
 ## [0.2.0] - 2026-11-25
 
 Survivable unattended: probe, ceiling, lock, apply — plus a reproducible verification matrix.

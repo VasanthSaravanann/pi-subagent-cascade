@@ -1,0 +1,33 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is deliberately absent: the runner uses `sh -c` and
+        # process-group SIGKILL. See the Platform note in README.
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Types first: vitest strips types without checking them, which is how a
+      # missing `apply` field shipped in v0.2.0.
+      - run: npm run typecheck
+      - run: npm test
