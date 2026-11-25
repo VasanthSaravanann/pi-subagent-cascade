@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { LINKED_DIRS, addWorktree, applyPatch, capturePatch, git, linkDependencyDirs, removeWorktree } from "../src/isolation.js";
+import { LINKED_DIRS, addWorktree, applyPatch, capturePatch, git, linkDependencyDirs, removeWorktree, runShell } from "../src/isolation.js";
 
 const dirs = () => {
 	const base = fs.mkdtempSync(path.join(os.tmpdir(), "cascade-link-"));
@@ -137,5 +137,26 @@ describe("capturePatch", () => {
 		const patch = await capturePatch(wt.path);
 		await removeWorktree(repo, wt.path);
 		expect(patch).toContain("brand-new.txt");
+	});
+});
+
+describe("runShell deadline", () => {
+	it("resolves after the deadline even when a grandchild holds the pipe open", async () => {
+		const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cascade-shell-"));
+		const started = Date.now();
+		// The background sleep inherits stdout; without the grace timer the
+		// promise would wait for it (measured: an 18-minute stall on a killed child).
+		const res = await runShell("sleep 30 & echo started", cwd, 300);
+		const elapsed = Date.now() - started;
+		expect(res.timedOut).toBe(true);
+		expect(res.exitCode).toBeNull();
+		expect(elapsed).toBeLessThan(8000);
+	});
+
+	it("reports an exit code for a command that finishes in time", async () => {
+		const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cascade-shell-ok-"));
+		const res = await runShell("exit 3", cwd, 5000);
+		expect(res.timedOut).toBe(false);
+		expect(res.exitCode).toBe(3);
 	});
 });

@@ -139,13 +139,26 @@ export function runChild(options: RunChildOptions): Promise<ChildResult> {
 		});
 
 		let timedOut = false;
+		let settled = false;
+		const settle = () => {
+			if (settled) return;
+			settled = true;
+			finish();
+			resolve(result);
+		};
 		const timer = setTimeout(() => {
 			timedOut = true;
+			result.timedOut = true;
+			result.exitCode = null;
 			try {
 				process.kill(-child.pid!, "SIGKILL");
 			} catch {
 				child.kill("SIGKILL");
 			}
+			// A killed `pi` can leave a grandchild holding stdout open, so
+			// 'close' may not fire for many minutes (measured: 18 min). Resolve
+			// on a short grace timer instead of waiting for the pipe to drain.
+			setTimeout(settle, 5_000);
 		}, options.timeoutMs);
 
 		const onAbort = () => {
@@ -170,14 +183,12 @@ export function runChild(options: RunChildOptions): Promise<ChildResult> {
 		child.on("close", (code) => {
 			result.exitCode = timedOut ? null : code;
 			result.timedOut = timedOut;
-			finish();
-			resolve(result);
+			settle();
 		});
 
 		child.on("error", (error) => {
 			result.spawnError = String(error);
-			finish();
-			resolve(result);
+			settle();
 		});
 	});
 }

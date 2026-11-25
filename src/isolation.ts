@@ -136,6 +136,12 @@ export function linkDependencyDirs(repo: string, worktree: string): string[] {
 		child.stderr?.on("data", collect);
 
 		let timedOut = false;
+		let settled = false;
+		const settle = (code: number | null) => {
+			if (settled) return;
+			settled = true;
+			resolve({ exitCode: timedOut ? null : code, output: out, timedOut });
+		};
 		const timer = setTimeout(() => {
 			timedOut = true;
 			try {
@@ -143,15 +149,19 @@ export function linkDependencyDirs(repo: string, worktree: string): string[] {
 			} catch {
 				child.kill("SIGKILL");
 			}
+			// Same reason as the child runner: a killed shell can leave a
+			// grandchild holding the pipes, delaying 'close' indefinitely.
+			setTimeout(() => settle(null), 5_000);
 		}, timeoutMs);
 
 		child.on("close", (code) => {
 			clearTimeout(timer);
-			resolve({ exitCode: timedOut ? null : code, output: out, timedOut });
+			settle(code);
 		});
 		child.on("error", (e) => {
 			clearTimeout(timer);
-			resolve({ exitCode: null, output: `${out}\n${String(e)}`, timedOut });
+			out = `${out}\n${String(e)}`;
+			settle(null);
 		});
 	});
 }
