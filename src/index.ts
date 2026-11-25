@@ -62,6 +62,7 @@ type Params = {
 	expect?: string;
 	profile?: string;
 	maxCostUsd?: number;
+	apply?: boolean;
 };
 
 function writePatch(taskId: string, tier: string, patch: string): string | null {
