@@ -164,6 +164,18 @@ cd /tmp/cascade-verify/c4 && pi
 
 Two numbers worth keeping honest: escalating costs roughly **8×** a cheap first attempt (`$0.024` vs `$0.0023`), and a timeout that fires before the child reports usage records **`$0`** — an under-count, not a saving.
 
+## Updates
+
+Once a release is on npm, Pi's own package machinery handles distribution — there is no registry to submit to:
+
+- **Discovery**: the `pi-package` keyword makes the package eligible for the [Pi package gallery](https://pi.dev/packages).
+- **Install**: `pi install npm:@vasanthsaravanan/pi-subagent-cascade` records the source in `~/.pi/agent/settings.json` (or `.pi/settings.json` with `--local`).
+- **Update notice**: at interactive startup Pi compares the installed version against `npm view … version` and shows `Package Updates Available` when a newer one exists.
+- **Update**: `pi update --extensions` installs `@latest`; `pi update @vasanthsaravanan/pi-subagent-cascade` updates just this package. Plain `pi update` only updates Pi itself.
+- **Changelog**: on the next fresh launch Pi shows `CHANGELOG.md` entries newer than the version it last saw — matched against `package.json`'s `version`, so a release without a version bump shows nothing.
+
+Two consequences, both deliberate: an install pinned to an exact version (`…@0.2.1`) is never checked and never updated, and a local path install is not update-checked at all. Install unpinned if you want the notices.
+
 ## Security
 
 - **The gate is shell you (or the model) supply.** It runs as `sh -c <gate>` on your machine, inside the attempt worktree, with your environment. Only pass gates you would run yourself, and remember a model proposes the call: review it before approving, or give the tool a fixed gate in a prompt template of your own.
