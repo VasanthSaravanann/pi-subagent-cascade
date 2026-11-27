@@ -389,6 +389,7 @@ pi install npm:@vasanthsaravanan/pi-subagent-cascade        # or ./  for the che
 ### Working rules that carried the last two nights
 
 - **One step = one commit, PASS before advancing.** Two fix attempts, then that step's `If it fails` line. Never leave a step half-done.
+- **Every step in a run sheet has four lines**, which is what made the v0.2.0 night recoverable: `Do:` the change; `Verify:` the command whose output decides pass/fail (a test count, a row count, a named string); `Commit:` the message; `If it fails:` the documented fallback, so a red step never becomes improvisation.
 - **State lives outside the session**: commits, `~/.pi/agent/cascade/ledger.jsonl`, and `~/.pi/agent/cascade/run-$(date +%F).log` (one line per step: ts, step, PASS/FAIL, spend). Logs stay out of the repo.
 - **No raw output in context.** Write long runs to the log, keep a ≤3-line summary. If the driver's own context passes ~150k tokens, stop, write a 5-line handover (`done / next / blocked / spend / open questions`), start a fresh session.
 - **One driver model per night**, and re-read `SKILL.md` §8 before claiming anything about cost.
