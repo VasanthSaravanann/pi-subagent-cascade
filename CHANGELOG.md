@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.2] - 2026-11-27
+
+### Added
+
+- README `Updates` section: how install, the `Package Updates Available` notice, `pi update --extensions`, version pinning and changelog display work for a published package.
+
+### Changed
+
+- Design-doc recovery note in the internal notes: the project directory was wiped except `node_modules`; source was restored from `origin`, three internal docs were reconstructed byte-exactly from a session transcript, two superseded drafts were lost. No product code changed in this release.
+
 ## [0.2.1] - 2026-11-25
 
 Publish readiness. No behaviour change beyond one type fix.
