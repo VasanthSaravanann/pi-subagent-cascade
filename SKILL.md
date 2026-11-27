@@ -14,7 +14,7 @@
 | Lineage | `subagent_routers.md` → `plan.md` → `execution-plan.md` → this file |
 | Uncommitted siblings | `plan.md`, `execution-plan.md`, `protocol .md`, `subagent_routers.md`, `docs/` |
 
-Read by task: §2 constraints, §6 architecture, §7 execution log, §8 test matrix, §9 fixes, §10 environment traps, §12 rules. §1–§5 are the analysis that produced the scope; they are settled and should not be re-litigated without a measurement.
+Read by task: §2 constraints, §6 architecture, §7 execution log, §8 test matrix, §9 fixes, §10 environment traps, §12 rules, **§15 to resume after a fresh clone**. §1–§5 are the analysis that produced the scope; they are settled and should not be re-litigated without a measurement.
 
 ## 1. Verdict
 
@@ -372,6 +372,42 @@ npm view @vasanthsaravanan/pi-subagent-cascade@<v> dist.shasum
 - **Published 27 Nov:** `0.2.3` is `latest`; `0.2.2` is live but deprecated (identical code, published minutes apart while npm staged the first attempt). The `0.0.0-stage` holding version remains: `npm unpublish` is refused for bypass-2FA granular tokens, so it needs the npm web UI (Manage versions) if it should disappear.
 - **Publish path that actually works:** a bypass-2FA granular token in `~/.npmrc` plus `npm publish --access public`. With 2FA enforced and no OTP, npm returns `202` and stages the publish behind a `0.0.0-stage` holding version; republishing the same version then fails with `409 Cannot publish over previously staged version`. Bump the patch version or approve the stage in the UI.
 - **Registry cache:** `curl`/`npm view` kept reporting only `0.0.0-stage` for ~10 minutes after the publish was approved. A cache-busted request (`?t=<epoch>`) showed the new versions immediately; do not conclude a publish failed from a cached packument.
-- **Recovery note (27 Nov):** the project directory was wiped except `node_modules` — no `.git`, no source. Code came back from `origin` (tags v0.1.0 … v0.2.3); `SKILL.md`, `execution-plan.md` and `subagent_routers.md` were reconstructed byte-exactly from a pi session transcript. `plan.md` and `protocol .md` were unrecoverable and are superseded. **`SKILL.md` is now tracked** (27 Nov) after that incident; the remaining drafts (`execution-plan.md`, `subagent_routers.md`) still have no backup and a copy lives at `~/Desktop/pi-subagent-cascade-notes/`.
+- **Recovery note (27 Nov, kept for the lesson):** the project directory was wiped except `node_modules` — no `.git`, no source. Code came back from `origin` (tags v0.1.0 … v0.2.3); `SKILL.md`, `execution-plan.md` and `subagent_routers.md` were reconstructed byte-exactly from a pi session transcript. `plan.md` and `protocol .md` were unrecoverable and are superseded. **`SKILL.md` is now tracked** (27 Nov) after that incident, so a fresh clone restores the context (§15). The `~/Desktop/pi-subagent-cascade-notes/` folder was retired once this file absorbed the drafts' remaining value: a second copy outside git only goes stale.
 - Windows is unclaimed, not fixed: `sh -c` gates and process-group SIGKILL are POSIX. Deliberately absent from CI.
 - Known production gaps, in order: the lock is machine-wide rather than per repo; no stale-worktree sweep after a hard kill; the gate is an exit code, so a deleted/skipped test still passes; no steering, resume, or crash recovery.
+
+## 15. Returning to this project
+
+The repo is the whole context: `SKILL.md` (this file, tracked since 27 Nov), `README.md`, `CHANGELOG.md`, `fixtures/`, `src/`, `test/`. Nothing needed to resume lives only on a laptop disk.
+
+```bash
+git clone https://github.com/VasanthSaravanann/pi-subagent-cascade.git
+cd pi-subagent-cascade && npm install && npm run check      # tsc + 78 tests
+pi install npm:@vasanthsaravanan/pi-subagent-cascade        # or ./  for the checkout
+```
+
+### Working rules that carried the last two nights
+
+- **One step = one commit, PASS before advancing.** Two fix attempts, then that step's `If it fails` line. Never leave a step half-done.
+- **State lives outside the session**: commits, `~/.pi/agent/cascade/ledger.jsonl`, and `~/.pi/agent/cascade/run-$(date +%F).log` (one line per step: ts, step, PASS/FAIL, spend). Logs stay out of the repo.
+- **No raw output in context.** Write long runs to the log, keep a ≤3-line summary. If the driver's own context passes ~150k tokens, stop, write a 5-line handover (`done / next / blocked / spend / open questions`), start a fresh session.
+- **One driver model per night**, and re-read `SKILL.md` §8 before claiming anything about cost.
+- **Time-boxing (used for the v0.2.0 night):** at 1 h drop optional correctness-lite steps; at 4 h ship only the steps that protect an unattended run; at 7 h run only the two fixtures that carry the headline claims; at 9 h do docs + tag and stop. A correct small release beats a broken large one.
+
+### Stop conditions (halt and report, do not improvise)
+
+1. The probe finds zero working models on both providers.
+2. Two consecutive steps fail after two fix attempts each.
+3. `git push` fails (auth) — commit locally, stop.
+4. Reaching the publish step — that is a human decision, never a loop step (see §13.2 for why).
+5. The budget ceiling is exceeded and verification is incomplete.
+
+### Backlog
+
+Not started, in order: patch-apply UX polish; failing-test-set comparison for partial progress; per-signature stats with a shared prior; **randomized exploration** (required before any adaptive claim — the ledger is one-armed, `T0: FAIL` says nothing about what T1 would have done); then the adaptive skip.
+
+Still rejected: `/router-pin` and `/router-replay` — no counterfactual data to answer them, and the 24 h ledger window is too short to pretend otherwise. Kept out permanently: Rust/WASM classifier, Wilson lower-bound skip, `git stash`/`git clean` rollback, 4-bucket taxonomy, config-file cost rates (§1).
+
+### Drafts that are gone and do not need restoring
+
+`plan.md`, `protocol .md`, `execution-plan.md`, `subagent_routers.md` were never tracked and were lost in the 27 Nov wipe (two were recovered, then folded in here). Their content is summarised in §1–§5 and §7; `execution-plan.md`'s remaining value — spend policy, working rules, stop conditions, backlog — is now in this section (§6.2 already covers profiles and probing). Nothing in them is required to build, test, or release.
