@@ -1,20 +1,18 @@
----
-name: subagent-router
-description: Record and operating manual for `@vasanthsaravanan/pi-subagent-cascade` — the gate-verified cheap-to-frontier subagent cascade for Pi (T0 → T0-repair → T1, worktree-isolated attempts, host-run gates, JSONL cost ledger, `/router-stats`). Use when changing the runner, ladder, classifier, ledger, packaging, or the shipped routing skill; when reviewing a routing/learning feature proposal; when reproducing or extending the test matrix; or when deciding what is safe to claim about cost savings.
-metadata:
-  source-idea: docs/proposal.md (from subagent_routers.md)
-  executable-plan: plan.md, execution-plan.md
-  status: **published 27 Nov 2026** — `@vasanthsaravanan/pi-subagent-cascade@0.2.3` is `latest`, verified by installing the registry tarball and running a live cascade through it; repo public
-  verified-against: pi-coding-agent 1.6.0, pi-subagents 0.90.0, pi-subagent-model-router 0.3.0, vitest 3.2.7
-  repo: github.com/VasanthSaravanann/pi-subagent-cascade (private)
-  git-excluded: this file, plan.md, execution-plan.md, protocol .md, subagent_routers.md, docs/
----
-
 # pi-subagent-cascade — design of record
 
-> **Not the shipped skill.** The routing skill users get is `skills/subagent-router/SKILL.md`.
-> This file is the internal design of record: tracked in git, excluded from the npm tarball
-> (`files` whitelist in `package.json`), and never referenced at runtime.
+> **Not a skill, and not the shipped one.** Users get `skills/subagent-router/SKILL.md`.
+> This file is internal engineering notes: tracked in git (since 27 Nov), excluded from the
+> npm tarball by the `files` whitelist, and never loaded at runtime. It deliberately has no
+> skill frontmatter — a `name: subagent-router` header here would collide with the real skill.
+
+| | |
+|---|---|
+| Package | `@vasanthsaravanan/pi-subagent-cascade` |
+| Status | **published 27 Nov 2026** — `0.2.3` is `latest`, verified by installing the registry tarball and running a live cascade through it |
+| Repo | github.com/VasanthSaravanann/pi-subagent-cascade (public) |
+| Verified against | pi-coding-agent 1.6.0, pi-subagents 0.90.0, pi-subagent-model-router 0.3.0, vitest 3.2.7 |
+| Lineage | `subagent_routers.md` → `plan.md` → `execution-plan.md` → this file |
+| Uncommitted siblings | `plan.md`, `execution-plan.md`, `protocol .md`, `subagent_routers.md`, `docs/` |
 
 Read by task: §2 constraints, §6 architecture, §7 execution log, §8 test matrix, §9 fixes, §10 environment traps, §12 rules. §1–§5 are the analysis that produced the scope; they are settled and should not be re-litigated without a measurement.
 
