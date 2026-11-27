@@ -1,5 +1,5 @@
-# never committed, never published — internal design + planning docs
-/SKILL.md
+# design of record: tracked in git, excluded from the npm tarball via `files`.
+# The rest below stays uncommitted.
 /plan.md
 /protocol*.md
 /subagent_routers.md
