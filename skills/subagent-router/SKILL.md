@@ -2,7 +2,7 @@
 name: subagent-router
 description: Route delegated coding work through cheap-to-frontier model escalation verified by a deterministic gate. Use when a task can be proven done by a shell command (node --test, npm test, pytest, cargo test, tsc --noEmit) and you want a cheap model tried first, with an automatic repair attempt and one escalation to a stronger model. Use it for implementation, bugfix, and refactor work that ends in a runnable check. Do not use it for read-only exploration, code review, research, or any task without a deterministic verification command; for those use the plain subagent tool.
 metadata:
-  version: "0.2.2"
+  version: "0.2.3"
 ---
 
 # Subagent cascade router

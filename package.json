@@ -1,6 +1,6 @@
 {
   "name": "@vasanthsaravanan/pi-subagent-cascade",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Gate-verified cheap-to-frontier subagent escalation for pi-subagents, with a JSONL cost ledger.",
   "license": "MIT",
   "author": "Vasanth Saravanan",
