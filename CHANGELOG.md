@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- First publish attempt: npm staged `0.2.2` behind a 2FA proof-of-presence and reserved the name with its `0.0.0-stage` holding version, so `0.2.2` can no longer be published over itself. `0.2.3` is the first publishable version; no package code changed.
+- Publish sequence only; no package code changed. npm staged `0.2.2` behind a 2FA proof-of-presence and reserved the name with its `0.0.0-stage` holding version, so `0.2.3` was published to avoid overwriting the staged version. Both were approved; `0.2.2` is deprecated in favour of `0.2.3`.
 
 ## [0.2.2] - 2026-11-27
 
