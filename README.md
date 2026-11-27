@@ -2,6 +2,8 @@
 
 Cheap-to-frontier model escalation for delegated Pi work, gated by your own test suite.
 
+**Published:** [`@vasanthsaravanan/pi-subagent-cascade@0.2.3`](https://www.npmjs.com/package/@vasanthsaravanan/pi-subagent-cascade). The `0.2.3` tarball on the registry is byte-identical to the artifact verified at release (shasum `e7513201…a3b313`), was installed from npm, and ran a live cascade. Doc-only commits after that tag are not in the published tarball until the next release.
+
 A delegated task runs on a cheap model first. If the gate fails, the same model gets one repair attempt with the error text. If it still fails, the frontier model takes over. Every attempt runs in its own git worktree and every attempt is recorded with its real cost.
 
 ## Why
@@ -19,7 +21,7 @@ Model routers guess a tier before the work happens. This one observes the result
 pi install npm:@vasanthsaravanan/pi-subagent-cascade
 ```
 
-Requires **Pi 1.6+**, **Node 20+**, and a git repository for the work to run in.
+Install **without** a version pin: Pi only checks pinned and local installs for updates if you ask it to, and a pin freezes that user silently. Requires **Pi 1.6+**, **Node 20+**, and a git repository for the work to run in.
 
 **Platform:** macOS and Linux. Windows is not supported — attempts are launched with `sh -c` and killed by process group, and neither behaves the same there.
 
@@ -164,9 +166,20 @@ cd /tmp/cascade-verify/c4 && pi
 
 Two numbers worth keeping honest: escalating costs roughly **8×** a cheap first attempt (`$0.024` vs `$0.0023`), and a timeout that fires before the child reports usage records **`$0`** — an under-count, not a saving.
 
+### Verified from the published package
+
+Not from this checkout — from the registry artifact:
+
+| Check | Result |
+|---|---|
+| `dist.shasum` vs local `npm pack` | identical (`e7513201dbee536d038b5125f9f4aaee17a3b313`) |
+| Published tarball | 19 files, `pi.extensions` + `pi.skills` present, `pi-package` keyword, **zero runtime deps** (host packages as peers) |
+| `pi install npm:@vasanthsaravanan/pi-subagent-cascade` | installs, `/router-stats` renders |
+| Live cascade through the published code (`fixtures/rust-t0`) | `t0 PASS`, `$0.00245`, gate green |
+
 ## Updates
 
-Once a release is on npm, Pi's own package machinery handles distribution — there is no registry to submit to:
+This package is published. Pi's own package machinery handles distribution from here — there is no registry to submit to, and **publishing pushes to nobody**: only users who install it are affected.
 
 - **Discovery**: the `pi-package` keyword makes the package eligible for the [Pi package gallery](https://pi.dev/packages).
 - **Install**: `pi install npm:@vasanthsaravanan/pi-subagent-cascade` records the source in `~/.pi/agent/settings.json` (or `.pi/settings.json` with `--local`).
@@ -174,7 +187,9 @@ Once a release is on npm, Pi's own package machinery handles distribution — th
 - **Update**: `pi update --extensions` installs `@latest`; `pi update @vasanthsaravanan/pi-subagent-cascade` updates just this package. Plain `pi update` only updates Pi itself.
 - **Changelog**: on the next fresh launch Pi shows `CHANGELOG.md` entries newer than the version it last saw — matched against `package.json`'s `version`, so a release without a version bump shows nothing.
 
-Two consequences, both deliberate: an install pinned to an exact version (`…@0.2.1`) is never checked and never updated, and a local path install is not update-checked at all. Install unpinned if you want the notices.
+Two consequences, both deliberate: an install pinned to an exact version (`…@0.2.3`) is never checked and never updated, and a local path install is not update-checked at all. Install unpinned if you want the notices.
+
+Nothing auto-updates: Pi checks for available versions at interactive startup and only shows the notice; `pi update --extensions` is the action that installs. `PI_OFFLINE=1` disables the check entirely. Because this is a `0.x` package, a minor bump may change behaviour — read `CHANGELOG.md` before running `pi update --extensions` if a workflow depends on this tool.
 
 ## Security
 
